@@ -53,3 +53,6 @@ rsconnect/
 
 # xlsx (data files - Excel) 
 *.xlsx
+
+# word files 
+*.docx
