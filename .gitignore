@@ -46,4 +46,10 @@ docs/
 po/*~
 
 # RStudio Connect folder
-rsconnect/
+rsconnect/ 
+
+# txt (data files - text files)
+*.txt 
+
+# xlsx (data files - Excel) 
+*.xlsx
