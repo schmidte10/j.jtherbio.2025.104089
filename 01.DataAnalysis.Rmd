@@ -1,0 +1,466 @@
+---
+title: "01. Chapter5 - Interspecific variation in enzyme thermal performance curves"
+author: "Elliott Schmidt"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    keep_md: yes
+    code_folding: show
+    collapse: no
+    df_print: paged
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 6
+    highlight: monochrome
+    theme: flatly
+    latex_engine: xelatex
+    toc: no
+    toc_float: no
+    css: styles.css
+  pdf_document:
+    df_print: default
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 4
+    highlight: tango
+    latex_engine: xelatex
+    number_sections: yes
+    toc_depth: 2
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+classoption: a4paper
+---
+
+# Scenario 
+
+Understanding thermal perfomance curves of anaerobic and aerobic enzymes for species can help identify differences in thermal tolerance among difference species. In this study four different species including, _Apogon rubrimacula_, _Apogon doederlein_, _Pomeacentrus australia_, and _Pomacentrus moluccensis_ had white muscle tissue samples collected, and used to determine thermal performance curves of two enzymes - lactate dehydrogenase (LDH) and citrate synthase (CS). Each enzyme was tested over five different temperatures including, 10$^\circ$C, 20$^\circ$C, 30$^\circ$C, 40$^\circ$C, and 50$^\circ$C, to create a thermal performance curve. Specie in this study consisted for two cardinal fish species and two damselfish species, with different levels of reliance on coral reef structures. Results from this study will help determine thermal tolerance levels of nultiple reef species to help understand how different species may respond differently to changing environmental conditions. 
+
+# Load packages 
+
+```{r load-packages, warning=FALSE, message=FALSE}
+library(plyr) # data manipulation
+library(tidyverse) # data manipulation
+library(janitor) # data manipulation
+library(dplyr) # data manipulation
+library(lubridate) # data manipulation - specifically time data
+library(ggplot2) # plotting figures
+library(glmmTMB) # running models
+library(performance) # model validation
+library(car) # dependent
+library(DHARMa) # model validation
+library(MuMIn) # model validation
+library(kableExtra) # creating tables
+library(broom) # dependent
+library(emmeans) # post-hoc analysis
+library(ggeffects) # plotting models/model validation
+library(vtable) # creating tables
+library(modelr) # model validation
+library(kableExtra) # formatting output tables
+library(sjPlot) # plotting models
+```
+
+# Lactate dehydrogenase (LDH)
+
+## Read in the data
+
+```{r ldh-set-dir-hide, include=FALSE}
+working.dir = "C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/"
+```
+
+```{r ldh-set_dir}
+knitr::opts_knit$set(root.dir=working.dir)
+```
+
+## Load data 
+```{r ldh-import-data-hide, include=FALSE}
+import.data = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/LDH_Hunter.txt") 
+import.data2 = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/tissue_mass.txt") 
+```
+
+```{r ldh-load-data}
+ldh <- import.data
+tissue.mass <- import.data2
+``` 
+
+## Data manipulation 
+
+```{r ldh-data-manipulation-1, warning=FALSE, message=FALSE}
+#--- data preparation/manipulation ---# 
+ldh2 <- ldh |>
+  clean_names() |>
+  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |> 
+  mutate(creation_time = dmy_hm(creation_time)) |>
+  separate(creation_time, into=c('DATE','TIME'), sep = " ", remove = FALSE) |>
+  arrange(sample_id_1, DATE, TIME) 
+
+ldh3 <- ldh2 |> 
+  mutate(TIME = hms(ldh2$TIME)) |>
+  mutate(TIME = chron(times=ldh2$TIME)) |>
+  arrange(TIME) |>
+  dplyr::group_by(sample, sample_id_1) |> 
+  dplyr::mutate(TIME_DIFF = TIME - first(TIME)) |> 
+  dplyr::filter(TIME != first(TIME)) |>
+  dplyr::ungroup() |> 
+  mutate(TIME_DIFF_SECS = period_to_seconds(hms(TIME_DIFF))) |> 
+  mutate(MINUTES = TIME_DIFF_SECS/60) |> 
+  mutate(MINUTES = round(MINUTES, digits = 2)) |> 
+  dplyr::rename(CUVETTE = sample_id_1) |> 
+  mutate(LATIN_NAME = case_when( species =="Adoed"~ "Apogon doederlein", 
+                             species == "Arub" ~ "Apogon rubrimacula", 
+                             species == "Paus" ~ "Pomacentrus australis",
+                             species == "Pmol" ~ "Pomacentrus moluccensis",
+                             TRUE ~ "na")) |> 
+  unite("UNIQUE_SAMPLE_ID", c(species, replicate, temperature, sample_index), sep="_", remove = FALSE)
+```
+
+### Data cleaning 
+
+Next select data points will be removed. Data points have been checked using previously written app script that allows the user to look at the plotted points of samples that were run. Because we are interested in the slope, points that plateaued were removed from the analysis, as it signifies that the reaction ran out of 'fuel' to use.
+
+* **grp1**: removed last data point which was causing a plateau
+* **grp2**: removed last 2 data points which was causing a plateau
+* **grp3**: removed last 3 data points which was causing a plateau
+* **grp4**: removed last 4 data points which was causing a plateau
+* **grp5**: removed last 5 data points which was causing a plateau
+
+```{r data-manipulation-2, warning=FALSE, message=FALSE} 
+grp1 <- c() 
+grp2 <- c("Paus_07_50_1","Paus_07_50_2","Paus_07_50_3","Paus_08_50_1","Paus_08_50_2","Paus_08_50_3", 
+          "Pmol_06_50_1","Pmol_06_50_2","Pmol_06_50_3", "Pmol_08_50_1","Pmol_08_50_2","Pmol_08_50_3", 
+          "Pmol_09_50_1","Pmol_09_50_2","Pmol_09_50_3")
+grp3 <- c() 
+grp4 <- c("Adoed_05_50_1","Adoed_05_50_2","Adoed_05_50_3", "Adoed_09_50_1","Adoed_09_50_2","Adoed_09_50_3") 
+grp5 <- c("Arub_08_50_1","Arub_08_50_2","Arub_08_50_3", "Arub_07_50_1","Arub_07_50_2","Arub_07_50_3", 
+          "Adoed_04_50_1","Adoed_04_50_2","Adoed_04_50_3", "Adoed_06_50_1","Adoed_06_50_2","Adoed_06_50_3", 
+          "Adoed_07_50_1","Adoed_07_50_2","Adoed_07_50_3", "Adoed_08_50_1","Adoed_08_50_2","Adoed_08_50_3", 
+          "Adoed_10_50_1","Adoed_10_50_2","Adoed_10_50_3", "Pmol_01_50_1","Pmol_01_50_2","Pmol_01_50_3")  
+grp6 <- c() 
+grp7 <- c() 
+grp8 <- c("Adoed_02_50_1","Adoed_02_50_2","Adoed_02_50_3") 
+```
+
+
+```{r ldh-data-cleaning, warning=FALSE, message=FALSE}
+ldh3.filtered <- ldh3 |> 
+  filter(!(UNIQUE_SAMPLE_ID %in% c("Arub_08_30_2", "Arub_06_40_2", "Arub_04_10_1", "Arub_02_40_2", 
+                                   "Adoed_03_30_2", "Adoed_04_40_1", "Adoed_08_30_2", 
+                                   "Paus_10_20_2", 
+                                   "Pmol_03_40_3", "Pmol_04_50_3", "Pmol_05_30_2"))) |>
+  dplyr::group_by(UNIQUE_SAMPLE_ID) |> 
+  arrange(UNIQUE_SAMPLE_ID, TIME) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp2 & row_number() > (n() - 2))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp4 & row_number() > (n() - 4))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp5 & row_number() > (n() - 5))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp8 & row_number() > (n() - 8))) |> 
+  dplyr::ungroup() |> 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3))
+```
+
+Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and the calculate enzyme activity based on these slopes. This will involve a number of steps.  
+
+### Data calculations 
+
+#### Step1: Extract slopes 
+
+Step1 will produce a data frame that provides you with the slope that was obtained for cuvettes 1-3 for each sample run at each experimental temperature. Note that at the end of this step we are removing slopes that were positive in value, as LDH slopes should produce a negative slope, due to NADH being used up. 
+```{r data-calc-1, warning=FALSE, message=FALSE}
+LDH_activity <- ldh3.filtered %>% 
+  dplyr::group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  dplyr::ungroup() %>%
+  filter(CUVETTE != ("6"))%>% 
+  filter(CUVETTE != ("4"))%>% 
+  filter(CUVETTE != ("5")) %>% 
+  filter(Slope <= 0)
+
+```
+
+#### Step2: Slope means
+
+Step2 will calculate the mean slope for cuvette 1-3. 
+```{r data-calc-2}
+LDH_activity_means <- LDH_activity %>% 
+  dplyr::group_by(UNIQUE_SAMPLE_ID) %>% 
+  dplyr::mutate(Mean = mean(Slope)) %>% 
+  ungroup()
+```
+
+#### Step3: Background activity level
+
+Step3 will calculate background activity level by measuring the slope from cuvette 5 (postive control)
+```{r data-calc-3, warning=FALSE, message=FALSE}
+LDH_background <- ldh3 %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2])
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE == ("5")) %>% 
+  dplyr::rename(Background = Slope) %>% 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3)) 
+```
+
+#### Step4: Merging dataframes
+
+Step4 will merge the data frames that you created with the mean slopes and the background slopes.
+```{r data-calc-4, warning=FALSE, message=FALSE}
+final_table <- LDH_activity %>% 
+  full_join(distinct(LDH_activity_means[,c(1,6)]), by = "UNIQUE_SAMPLE_ID") %>% 
+  full_join(LDH_background[,c(1,4)], by = "UNIQUE_SAMPLE_ID") 
+final_table$Mean[duplicated(final_table$Mean)] <- ""
+final_table$Background[duplicated(final_table$Background)] <- ""
+final_table <- final_table %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = Background/Mean) 
+```
+
+#### Step5: Enzyme activity levels 
+
+Step5 is where enzyme activity levels are calculated. See further details in manuscript (doi: xxx). Within this step background activity level is taken into account and subtracted from slopes where background activity was >5% or more of the sample slope. 
+```{r data-calc-5, warning=FALSE, message=FALSE}
+ldh.data <- final_table %>% 
+  select(c(UNIQUE_SAMPLE_ID, Mean, Background, Background_perc)) %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = as.numeric(Background_perc)) %>% 
+  mutate(Background2 = case_when(Background_perc <= 0.05 ~ 0, 
+                                    TRUE ~ Background), 
+         LDH_ABSORBANCE = Mean - Background2) %>%
+  drop_na() %>% 
+  inner_join(select(ldh3.filtered, c(UNIQUE_SAMPLE_ID, species, replicate, temperature, LATIN_NAME)), by ="UNIQUE_SAMPLE_ID") %>% 
+  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE) %>%
+  inner_join(tissue.mass, by = "fish_id") %>% 
+  mutate(TISSUE_MASS_CENTERED = scale(tissue_mass, center = TRUE, scale = FALSE)) %>%
+  distinct(UNIQUE_SAMPLE_ID, .keep_all = TRUE) %>% 
+  mutate(PATH_LENGTH = 1, 
+         EXTINCTION_COEFFICIENT = 6.22, 
+         TISSUE_CONCENTRATION = 0.005, 
+         ASSAY_VOL = 0.975, 
+         SAMPLE_VOL = 0.025, 
+         LDH_ACTIVITY = ((LDH_ABSORBANCE/(PATH_LENGTH*EXTINCTION_COEFFICIENT*TISSUE_CONCENTRATION))*(ASSAY_VOL/SAMPLE_VOL))*-1) %>% 
+  mutate(species = factor(species), 
+         replicate = factor(replicate), 
+         temperature = as.numeric(temperature), 
+         fish_id = factor(fish_id)) %>% 
+  separate(LATIN_NAME, c("LATIN_GENUS","LATIN_SPECIES"), sep = " ", remove = FALSE) %>% 
+  mutate(LATIN_GENUS = factor(LATIN_GENUS), 
+         LATIN_SPECIES = factor(LATIN_SPECIES)) %>% 
+  mutate(LATITUDE = factor(case_when(species =="Adoed"~ "sub-tropical", 
+                             species == "Arub" ~ "tropical", 
+                             species == "Paus" ~ "sub-tropical",
+                             species == "Pmol" ~ "tropical",
+                             TRUE ~ "na")))
+```
+
+All done! Ready for data analysis 
+
+## Initial plot {.tabset}
+
+### LDH v TEMPERATURE [SPECIES]
+
+```{r ldh-initial-plots, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, color = species)) + 
+  geom_point() + geom_smooth(method = "lm", se=FALSE) + theme_classic() 
+```
+
+### LDH [distribution]
+```{r ldh-initial-plots-2, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x = LDH_ACTIVITY, fill = temperature, color = temperature)) + 
+  geom_density(alpha =0.5, position = "identity") 
+
+ggplot(ldh.data, aes(x=LDH_ACTIVITY)) + geom_histogram()
+```
+
+### LDH v TEMPERATURE [LATITUDE]
+```{r ldh-initial-plots-3, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = LATITUDE, fill=LATITUDE)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + facet_grid(~LATIN_GENUS) + theme_classic()
+```
+
+### LDH v TEMPERATURE [GENUS]
+```{r ldh-initial-plots-4, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = LATIN_GENUS, fill=LATIN_GENUS)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + facet_grid(~LATITUDE) + theme_classic()
+```
+
+### LDH v TEMPERATURE [SPECIES]
+```{r ldh-initial-plots-5, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + theme_classic()
+```
+
+### {-}
+
+## Fit the model 
+
+The model was fit using the **glm** and later **glmmTMB** package in R. A number of different models were tested to determine which hypothesis and associated variables best predicted resting oxygen consumption. Model fit was examined using AICc, BIC, and r-squared values. Additional model were examined via the validation diagnostics provided by the **performance** and **dHARMA** packages in R.
+
+From out initial plots we can see that our data is heavily skewed to the right. From our initial plots we can all see that the relationship between enzyme activity and temperature is no linear, but rather may represent either a quadratic or cubic relationship. Let's start out model selection process by comparing different polynomial models.  
+
+### polynomial models
+```{r model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+ldh.model.1 <- glm(LDH_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+
+ldh.model.1.p2 <- glm(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data)  
+
+ldh.model.1.p3 <- glm(LDH_ACTIVITY ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3, k=2) 
+bic=BIC(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(ldh.model.1)[1], r.squaredLR(ldh.model.1.p2)[1], r.squaredLR(ldh.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3, test = "Chisq")
+```
+
+Looks like the model where temperature is treated as a second order polynomial (quadratic) is better than the linear and third order polynomial model. Lets see if adding the variable **tissue.mass** improves the model. 
+
+### fixed factor comparisons
+```{r model-fit-2, warning=FALSE}
+#--- model 1 ---# 
+ldh.model.1.p2 <- glm(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data)  
+
+ldh.model.1.p2b <- glm(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + TISSUE_MASS_CENTERED, 
+               family = gaussian(),
+               data = ldh.data) 
+```
+
+#### model comparisons - fixed factor comparisons 
+```{r model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.model.1.p2, ldh.model.1.p2b, k=2) 
+bic=BIC(ldh.model.1.p2, ldh.model.1.p2b)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(ldh.model.1.p2)[1], r.squaredLR(ldh.model.1.p2b)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.model.1.p2, ldh.model.1.p2b, test = "Chisq")
+```
+
+The variable **TISSUE_MASS_CENTERED does not** improve the model, therefore it will be left out of the model moving forward. 
+
+Lastly, because tissue samples from the same fish were tested at multiple temperatures we need to include **fish_id** as a random factor. 
+
+### Generalised linear mixed model (GLMM)
+```{r glmm-1}
+ldh.glmm.1.p2 <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML = TRUE,
+               data = ldh.data) 
+```
+
+Great! Now lets check our model validations to see how the model is performing. 
+
+## Model validation {.tabset}
+
+### ldh.glmm.1.p2 [performance]
+
+```{r model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.glmm.1.p2 %>% check_model()
+```
+
+### ldh.glmm.1.p2 [DHARMa]
+
+```{r model-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.glmm.1.p2 %>% simulateResiduals(plot=TRUE)
+ldh.glmm.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+There are a number of issues with this model. Lets see if we can solve some of the issues by exploring link functions that we have available.  
+
+### {-}
+
+## Re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r ldh-re-fit-model-1}
+ldh.glmm.1.p2 <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(), #default is link="identity"
+               REML = FALSE,
+               data = ldh.data) 
+
+ldh.glmm.1.p2.log <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(link="log"),
+               REML = FALSE,
+               data = ldh.data)  
+
+ldh.glmm.1.p2.sqrt <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(link="sqrt"),
+               REML = FALSE,
+               data = ldh.data)  
+```
+
+### re-fit model comparisons [link function]
+
+```{r ldh-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.model.1.p2, ldh.glmm.1.p2.log,ldh.glmm.1.p2.sqrt,  k=2) 
+bic=BIC(ldh.model.1.p2, ldh.glmm.1.p2.log, ldh.glmm.1.p2.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(ldh.model.1.p2)[1], r.squaredGLMM(ldh.glmm.1.p2.log)[1], r.squaredGLMM(ldh.glmm.1.p2.sqrt)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.model.1.p2, ldh.glmm.1.p2.log,ldh.glmm.1.p2.sqrt, test = "Chisq")
+```
+
+From this model comparison it looks like the model that uses the **square root** link function does the best job modelling the data. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
+
+```{r ldh=re-fit-model-2}
+ldh.glmm.1.p2.sqrt <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(link="sqrt"),
+               REML = FALSE,
+               data = ldh.data)
+``` 
+
+## Model re-validation {.tabset}
+
+### ldh.glmm.1.p2 [performance]
+
+```{r ldh-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.glmm.1.p2.sqrt %>% check_model()
+```
+
+### ldh.glmm.1.p2 [DHARMa]
+
+```{r ldh-model-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.glmm.1.p2.sqrt %>% simulateResiduals(plot=TRUE)
+ldh.glmm.1.p2.sqrt %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### {-}
+
+Model looks better but there are still some issues with it. Because our data is all positive and has no zeros or negatives we can try to fit a Gamma model to see if that improves the model. 
+
