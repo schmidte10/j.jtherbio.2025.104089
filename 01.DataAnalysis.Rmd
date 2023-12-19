@@ -12,7 +12,7 @@ output:
     fig_height: 4
     fig_width: 6
     highlight: monochrome
-    theme: flatly
+    theme: cerulean
     latex_engine: xelatex
     toc: yes
     toc_float: yes
@@ -470,8 +470,6 @@ model.fit.table %>% knitr::kable(format = "html")  %>%
   kable_paper(full_width = TRUE) 
 ```
 
-## Model re-re-validation 
-
 ## Model re-re-validation {.tabset}
 
 ### ldh.glmm.1.p2.gamma [performance]
@@ -552,4 +550,173 @@ ldh.sqrt.model.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
 
 ```
 
+### plot_model 
+```{r ldh-model-trans-validatiaon-3, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+plot_model(ldh.sqrt.model.1.p2, type = "diag")[-2] 
+
+```
+
 The data looks much better and passes all the validations. 
+
+## Partial plots {.tabset} 
+
+### ggemmeans {.tabset} 
+
+#### TEMPERATURE V LATITUDE
+
+```{r ldh-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATITUDE) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS
+
+```{r ldh-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS V LATITUDE
+
+```{r ldh-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATITUDE|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+### plot_model 
+
+```{r ldhpartial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% plot_model(type='std', vline.color = "grey12", show.values=TRUE, sort.est = TRUE, value.offset = 0.3) 
+```
+
+#### {-}
+
+### {-}
+
+## Model investigation {.tabset .tabset-pills}
+
+### summary 
+```{r ldh-model-inv-1, echo=FALSE}
+as.data.frame(summary(ldh.sqrt.model.1.p2)$coefficients[1]) %>% 
+  dplyr::rename( 
+    Estimate = cond.Estimate,
+    StdError = cond.Std..Error,
+    Zvalue = cond.z.value,
+    Pvalue = cond.Pr...z..
+    ) %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### anova 
+```{r model-inv-2, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% Anova() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### confint 
+```{r model-inv-3, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% confint() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### r-squared
+```{r model-inv-4, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% performance::r2_nakagawa() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### {-} 
+
+## Pairwise comparisons {.tabset .tabset-faded} 
+
+##### emtrends 
+
+```{r rest-pairwise-1}
+ldh.sqrt.model.1.p2 %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+SCROLL TO THE RIGHT -->
+
+The numbers in the left most column in the table just mention that the slopes are assuming mean **MASS_CENTERED** and **RESTING_TIME_SEONDS** values when looking at differences between latitudinal slopes.
+
+##### emmeans 
+```{r rest-pairwise-2}
+ldh.sqrt.model.1.p2 %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+
+##### temperature 
+```{r rest-pairwise-3}
+ldh.sqrt.model.1.p2 %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
+```
+
+
+##### Means - f(temperature)
+```{r rest-pairwise-4}
+ldh.means <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response"); ldh.means$emmeans
+```
+
+##### Abs. diff - f(temperature)
+```{r rest-pairwise-5}
+ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
+```
+
+##### effect size
+```{r rmr-effect-size}
+ldh.emm <- ldh.sqrt.model.1.p2 %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
+eff_size(ldh.emm, sigma = sigma(ldh.sqrt.model.1.p2), edf=df.residual(ldh.sqrt.model.1.p2))
+```
+
+##### {-}
+
+## Summary figure 
+
+
+```{r ldh-sum-fig, fig.width=8, fig.height=6, echo=FALSE}
+ldh.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+ldh.emm.df <- ldh.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+ldh.obs <-  ldh.data %>% 
+  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA),
+         Resid = residuals(ldh.sqrt.model.1.p2),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_jitter(data=ldh.obs, 
+              aes(y=Fit^2, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,350), breaks = seq(0, 350, by = 50)) +
+  theme_classic() + 
+  ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#5D79FF", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#5D79FF", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldh.plot
+```
+
+# Citrate synthase (CS)
