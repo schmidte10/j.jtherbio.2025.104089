@@ -720,3 +720,49 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
 ```
 
 # Citrate synthase (CS)
+
+## Load data 
+```{r cs-import-data-hide, include=FALSE}
+cs.import.data = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/Lauren_CS.txt") 
+```
+
+```{r cs-load-data}
+cs <- cs.import.data
+``` 
+
+## Data manipulation
+```{r cs-data-manipulation-1, warning=FALSE, message=FALSE}
+#--- data preparation/manipulation ---# 
+cs2 <- cs |>
+  clean_names() |>
+  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |> 
+  mutate(creation_time = dmy_hm(creation_time)) |>
+  separate(creation_time, into=c('DATE','TIME'), sep = " ", remove = FALSE) |>
+  arrange(sample_id_1, DATE, TIME) 
+
+cs3 <- cs2 |> 
+  mutate(TIME = hms(cs2$TIME)) |>
+  mutate(TIME = chron(times=cs2$TIME)) |>
+  arrange(TIME) |>
+  dplyr::group_by(sample, sample_id_1) |> 
+  dplyr::mutate(TIME_DIFF = TIME - first(TIME)) |> 
+  dplyr::filter(TIME != first(TIME)) |>
+  dplyr::ungroup() |> 
+  mutate(TIME_DIFF_SECS = period_to_seconds(hms(TIME_DIFF))) |> 
+  mutate(MINUTES = TIME_DIFF_SECS/60) |> 
+  mutate(MINUTES = round(MINUTES, digits = 2)) |> 
+  dplyr::rename(CUVETTE = sample_id_1) |> 
+  mutate(LATIN_NAME = case_when( species =="Adoed"~ "Apogon doederlein", 
+                             species == "Arub" ~ "Apogon rubrimacula", 
+                             species == "Paus" ~ "Pomacentrus australis",
+                             species == "Pmol" ~ "Pomacentrus moluccensis",
+                             TRUE ~ "na")) |> 
+  unite("UNIQUE_SAMPLE_ID", c(species, replicate, temperature, sample_index), sep="_", remove = FALSE)
+```
+
+## Data cleaning 
+```{r data-manipulation-3, warning=FALSE, message=FALSE}
+
+
+
+```
