@@ -159,6 +159,13 @@ ldh3.filtered <- ldh3 |>
   mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3))
 ```
 
+
+```{r save-file-1}
+ldh3.filtered.table <- ldh3.filtered %>% select(c(2:8,11:19)) 
+names(ldh3.filtered.table) <-  names(ldh)
+write.table(ldh3.filtered.table, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(ldh3.filtered.table, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+```
 Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and the calculate enzyme activity based on these slopes. This will involve a number of steps.  
 
 ### Data calculations 
@@ -723,7 +730,12 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
 
 ## Load data 
 ```{r cs-import-data-hide, include=FALSE}
-cs.import.data = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/Lauren_CS.txt") 
+cs.import.data = read_delim("./import_files/Lauren_CS.txt", 
+    delim = "\t", escape_double = FALSE, 
+    col_types = cols(`Sample index` = col_factor(levels = c("1", 
+        "2", "3", "4", "5", "6")), `Sample ID 1` = col_factor(levels = c("1", 
+        "2", "3", "4", "5", "6")), `Creation time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p"), 
+        ...17 = col_skip()), trim_ws = TRUE)
 ```
 
 ```{r cs-load-data}
@@ -735,8 +747,7 @@ cs <- cs.import.data
 #--- data preparation/manipulation ---# 
 cs2 <- cs |>
   clean_names() |>
-  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |> 
-  mutate(creation_time = dmy_hm(creation_time)) |>
+  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |>  
   separate(creation_time, into=c('DATE','TIME'), sep = " ", remove = FALSE) |>
   arrange(sample_id_1, DATE, TIME) 
 
@@ -760,9 +771,184 @@ cs3 <- cs2 |>
   unite("UNIQUE_SAMPLE_ID", c(species, replicate, temperature, sample_index), sep="_", remove = FALSE)
 ```
 
-## Data cleaning 
-```{r data-manipulation-3, warning=FALSE, message=FALSE}
+### Data cleaning 
+
+Next select data points will be removed. Data points have been checked using previously written app script that allows the user to look at the plotted points of samples that were run. Because we are interested in the slope, points that plateaued were removed from the analysis, as it signifies that the reaction ran out of 'fuel' to use.
+
+Note that later on the first data point will be removed from all samples. For example, if a run requires that the first 4 data points be removed, 3 will be removed below and then one will be removed at a later step. 
 
 
+* **grp2**: removed first 2 data points which was causing a plateau
+* **grp3**: removed first 3 data points which was causing a plateau
+* **grp4**: removed first 4 data points which was causing a plateau
+* **grp5**: removed first 5 data points which was causing a plateau
 
+```{r data-manipulation-2, warning=FALSE, message=FALSE} 
+grp1 <- c("Arub_06_30_3","Arub_04_30_3","Paus_02_30_2","Pmol_01_20_3","Pmol_03_30_1","Pmol_03_30_3") 
+grp2 <- c("Arub_04_30_3","Paus_02_30_1")
+grp3 <- c("Adoed_03_20_3","Pmol_03_30_2","Pmol_03_10_3") 
+grp4 <- c("Arub_04_30_2","Arub_06_30_1","Adoed_05_20_2","Pmol_02_30_3","Pmol_03_10_1") 
+grp5 <- c("Pmol_01_20_2")  
+grp6 <- c("Arub_06_30_2","Pmol_02_30_1") 
+grp7 <- c("Arub_04_30_1","Pmol_03_10_2") 
+grp8 <- c("Pmol_02_30_2") 
+grp9 <- c("Adoed_03_20_2") 
+grp10 <- c() 
+grp11 <- c("Pmol_04_20_1","Pmol_04_20_3","Pmol_04_20_5") 
+data.grp1 <- c("Pmol_01_10_2") 
+data.grp2 <- c("Pmol_05_20_3")
+```
+
+
+```{r ldh-data-cleaning}
+cs3.filtered <- cs3 |> 
+  filter(!(UNIQUE_SAMPLE_ID %in% c(
+                                   #--- Apogon rubrimacula ---#
+                                   "Arub_02_10_1", "Arub_02_10_2", "Arub_02_10_3", # control slope steep 
+                                   "Arub_02_20_1", "Arub_02_20_2", "Arub_02_20_3", # slopes messy
+                                   "Arub_03_50_1", "Arub_03_50_2", "Arub_03_50_3", # control slope steep 
+                                   "Arub_04_10_1", "Arub_04_10_2", "Arub_04_10_3", # slopes messy
+                                   "Arub_04_20_1", "Arub_04_20_2", "Arub_04_20_3", # slopes are all negative
+                                   "Arub_05_30_1", "Arub_05_30_2", "Arub_05_30_3", # control slope steep 
+                                   "Arub_06_20_1", "Arub_06_20_2", "Arub_06_20_3", # slopes all negative
+                                   
+                                   #--- Apogon doederlein ---# 
+                                   
+                                   #--- Pomacentrus australia ---#
+                                   "Paus_02_10_2",  
+                                   "Paus_02_20_1", "Paus_02_20_2", "Paus_02_20_3", 
+                                   
+                                   #--- Pomacentrus moluccensis  
+                                   "Pmol_02_20_1", "Pmol_02_20_2", "Pmol_02_20_3", 
+                                   "Pmol_03_20_1", "Pmol_03_20_2", "Pmol_03_20_3",
+                                   "Pmol_03_40_1", "Pmol_03_40_2", "Pmol_03_40_3",
+                                   "Pmol_04_20_2", 
+                                   "Pmol_04_10_1", "Pmol_04_10_2", "Pmol_04_10_3"
+                                   ))) |>
+  dplyr::group_by(UNIQUE_SAMPLE_ID) |> 
+  dplyr::arrange(UNIQUE_SAMPLE_ID, TIME) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp1 & row_number() <= 1)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp2 & row_number() <= 2)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp3 & row_number() <= 3)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp4 & row_number() <= 4)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp5 & row_number() <= 5)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp6 & row_number() <= 6)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp7 & row_number() <= 7)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp8 & row_number() <= 8)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp9 & row_number() <= 9)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp10 & row_number() <= 10)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp11 & row_number() <= 11)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp1 & row_number() == 4)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp2 & between(row_number(), 7, 10))) |>
+  dplyr::ungroup() |> 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3))
+
+```
+
+Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and the calculate enzyme activity based on these slopes. This will involve a number of steps.  
+
+### Data calculations 
+
+#### Step1: Extract slopes 
+
+Step1 will produce a data frame that provides you with the slope that was obtained for cuvettes 1-3 for each sample run at each experimental temperature. Note that at the end of this step we are removing slopes that were positive in value, as LDH slopes should produce a negative slope, due to NADH being used up. 
+```{r cs-data-calc-1, warning=FALSE, message=FALSE}
+CS_activity <- cs3.filtered %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE != ("6"))%>% 
+  filter(CUVETTE != ("4"))%>% 
+  filter(CUVETTE != ("5")) %>% 
+  filter(Slope >= 0)
+
+```
+
+#### Step2: Slope means
+
+Step2 will calculate the mean slope for cuvette 1-3. 
+```{r data-calc-2}
+CS_activity_means <- CS_activity %>% 
+  group_by(UNIQUE_SAMPLE_ID) %>% 
+  mutate(Mean = mean(Slope)) %>% 
+  ungroup()
+```
+
+#### Step3: Background activity level
+
+Step3 will calculate background activity level by measuring the slope from cuvette 5 (postive control)
+```{r data-calc-3, warning=FALSE, message=FALSE}
+CS_background <- cs3.filtered %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE == ("5")) %>% 
+  dplyr::rename(Background = Slope)  
+```
+
+#### Step4: Merging dataframes
+
+Step4 will merge the data frames that you created with the mean slopes and the background slopes.
+```{r data-calc-4, warning=FALSE, message=FALSE}
+cs_final_table <- CS_activity %>% 
+  full_join(distinct(CS_activity_means[,c(1,6)]), by = "UNIQUE_SAMPLE_ID") %>%
+  full_join(CS_background[,c(1,4)], by = "UNIQUE_SAMPLE_ID") 
+cs_final_table$Mean[duplicated(cs_final_table$Mean)] <- ""
+cs_final_table$Background[duplicated(cs_final_table$Background)] <- ""
+cs_final_table <- cs_final_table %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = Background/Mean) 
+```
+
+#### Step5: Enzyme activity levels 
+
+Step5 is where enzyme activity levels are calculated. See further details in manuscript (doi: xxx). Within this step background activity level is taken into account and subtracted from slopes where background activity was >5% or more of the sample slope. 
+```{r data-calc-5, warning=FALSE, message=FALSE}
+CS.data <- cs_final_table %>% 
+  select(c(UNIQUE_SAMPLE_ID, Mean, Background, Background_perc)) %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = as.numeric(Background_perc)) %>% 
+  mutate(Background2 = case_when(Background_perc <= 0.05 ~ 0, 
+                                 TRUE ~ Background), 
+         CS_ABSORBANCE = Mean - Background2) %>%
+  inner_join(select(cs3.filtered, c(UNIQUE_SAMPLE_ID, species, replicate, temperature, LATIN_NAME)), by ="UNIQUE_SAMPLE_ID") %>% 
+  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE) %>%
+  inner_join(tissue.mass, by = "fish_id") %>% 
+  mutate(TISSUE_MASS_CENTERED = scale(tissue_mass, center = TRUE, scale = FALSE)) %>%
+  distinct(UNIQUE_SAMPLE_ID, .keep_all = TRUE) %>% 
+  mutate(PATH_LENGTH = 1, 
+         EXTINCTION_COEFFICIENT = 13.6, 
+         TISSUE_CONCENTRATION = 0.01, 
+         ASSAY_VOL = 0.930, 
+         SAMPLE_VOL = 0.020, 
+         CS_ACTIVITY = ((CS_ABSORBANCE/(PATH_LENGTH*EXTINCTION_COEFFICIENT*TISSUE_CONCENTRATION))*(ASSAY_VOL/SAMPLE_VOL)))   %>% 
+  separate(LATIN_NAME, c("LATIN_GENUS","LATIN_SPECIES"), sep = " ", remove = FALSE) %>% 
+  mutate(LATIN_GENUS = factor(LATIN_GENUS), 
+         LATIN_SPECIES = factor(LATIN_SPECIES)) %>% 
+  mutate(LATITUDE = factor(case_when(species =="Adoed"~ "sub-tropical", 
+                             species == "Arub" ~ "tropical", 
+                             species == "Paus" ~ "sub-tropical",
+                             species == "Pmol" ~ "tropical",
+                             TRUE ~ "na"))) %>% 
+  drop_na() %>% filter(CS_ACTIVITY >=0)
+```
+
+
+```{r save-file-1}
+write.table(cs3.filtered, file = "./excel_files/Lauren_CS_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(cs3.filtered, file = "./import_files/Lauren_CS_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+write.table(cs3, file = "./excel_files/Lauren_CS_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(cs3, file = "./import_files/Lauren_CS_processed.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 ```
