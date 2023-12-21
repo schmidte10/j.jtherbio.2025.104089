@@ -944,14 +944,210 @@ CS.data <- cs_final_table %>%
                              species == "Arub" ~ "tropical", 
                              species == "Paus" ~ "sub-tropical",
                              species == "Pmol" ~ "tropical",
-                             TRUE ~ "na"))) %>% 
+                             TRUE ~ "na")), 
+         temperature = as.numeric(temperature)) %>% 
   drop_na() %>% filter(CS_ACTIVITY >=0)
 ```
 
 
-```{r cs-save-file-1}
+```{r cs-save-file-1, echo=FALSE, hide=TRUE}
 write.table(cs3.filtered, file = "./excel_files/Lauren_CS_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(cs3.filtered, file = "./import_files/Lauren_CS_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 write.table(cs3, file = "./excel_files/Lauren_CS_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(cs3, file = "./import_files/Lauren_CS_processed.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 ```
+
+## Initial plot {.tabset}
+
+### CS v TEMPERATURE [SPECIES]
+
+```{r cs-initial-plots, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, color = species)) + 
+  geom_point() + 
+  stat_smooth(method = "lm", se=FALSE) + 
+  theme_classic() 
+```
+
+### CS [distribution]
+```{r cs-initial-plots-2, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x = CS_ACTIVITY, fill = temperature, color = temperature)) + 
+  geom_density(alpha =0.5, position = "identity") 
+
+ggplot(CS.data, aes(x=CS_ACTIVITY)) + geom_histogram()
+```
+
+### CS v TEMPERATURE [LATITUDE]
+```{r cs-initial-plots-3, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = LATITUDE, fill=LATITUDE)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATIN_GENUS) + theme_classic()
+```
+
+### CS v TEMPERATURE [GENUS]
+```{r cs-initial-plots-4, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = LATIN_GENUS, fill=LATIN_GENUS)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATITUDE) + theme_classic()
+```
+
+### CS v TEMPERATURE [SPECIES]
+```{r cs-initial-plots-5, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + theme_classic()
+```
+
+### {-} 
+
+## Fit the model 
+
+The model was fit using the **glm** and later **glmmTMB** package in R. A number of different models were tested to determine which hypothesis and associated variables best predicted resting oxygen consumption. Model fit was examined using AICc, BIC, and r-squared values. Additional model were examined via the validation diagnostics provided by the **performance** and **dHARMA** packages in R.
+
+From out initial plots we can see that our data is heavily skewed to the right. From our initial plots we can all see that the relationship between enzyme activity and temperature is no linear, but rather may represent either a quadratic or cubic relationship. Let's start out model selection process by comparing different polynomial models.  
+
+### polynomial models
+```{r cs-model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+cs.model.1 <- glm(CS_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data) 
+
+cs.model.1.p2 <- glm(CS_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data)  
+
+cs.model.1.p3 <- glm(CS_ACTIVITY ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r cs-model-comparisons-1, warning=FALSE}
+aic.c=AICc(cs.model.1, cs.model.1.p2, cs.model.1.p3, k=2) 
+bic=BIC(cs.model.1, cs.model.1.p2, cs.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(cs.model.1)[1], r.squaredLR(cs.model.1.p2)[1], r.squaredLR(cs.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(cs.model.1, cs.model.1.p2, cs.model.1.p3, test = "Chisq")
+```
+
+Looks like the model where temperature is treated as a first order polynomial (linear model) is better than the quadratic and third order polynomial model. Lets see if adding the variable **tissue.mass** improves the model. 
+
+### fixed factor comparisons
+```{r cs-model-fit-2, warning=FALSE}
+#--- model 1 ---# 
+cs.model.1 <- glm(CS_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data)  
+
+cs.model.1b <- cs.model.1 %>% update(. ~ temperature * LATITUDE * LATIN_GENUS + TISSUE_MASS_CENTERED) 
+```
+
+#### model comparisons - fixed factor comparisons 
+```{r cs-model-comparisons-2, warning=FALSE}
+aic.c=AICc(cs.model.1, cs.model.1b, k=2) 
+bic=BIC(cs.model.1, cs.model.1b)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(cs.model.1)[1], r.squaredLR(cs.model.1b)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(cs.model.1, cs.model.1b, test = "Chisq")
+```
+
+The variable **TISSUE_MASS_CENTERED does not** improve the model, therefore it will be left out of the model moving forward. 
+
+Lastly, because tissue samples from the same fish were tested at multiple temperatures we need to include **fish_id** as a random factor. 
+
+### Generalised linear mixed model (GLMM)
+```{r cs-glmm-1}
+cs.model.1 <- glmmTMB(CS_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML = TRUE,
+               data = CS.data) 
+```
+
+Great! Now lets check our model validations to see how the model is performing. 
+
+## Model validation {.tabset}
+
+### cs.model.1 [performance]
+
+```{r cs-model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+cs.model.1 %>% check_model()
+```
+
+### cs.model.1 [DHARMa]
+
+```{r cs-model-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+cs.model.1 %>% simulateResiduals(plot=TRUE)
+cs.model.1 %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### cs.model.1 [plot_model]
+```{r cs-model-validatiaon-3, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, fig.show='hold', out.width="50%"}
+par(mar=c(2,2,2,2))
+cs.model.1 %>% plot_model(type = "diag")
+```
+
+There are a number of issues with this model. Lets see if we can solve some of the issues by exploring link functions that we have available.  
+
+### {-}
+
+## Re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r ldh-re-fit-model-1}
+cs.model.1.log <- cs.model.1 %>% update(family=gaussian(link="log")) 
+cs.model.1.sqrt <- cs.model.1 %>% update(family=gaussian(link="sqrt")) 
+```
+
+### re-fit model comparisons [link function]
+
+```{r cs-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(cs.model.1, cs.model.1.log, cs.model.1.sqrt,  k=2) 
+bic=BIC(cs.model.1, cs.model.1.log, cs.model.1.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(cs.model.1)[1], r.squaredGLMM(cs.model.1.log)[1], r.squaredGLMM(cs.model.1.sqrt)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+From this model comparison it looks like the model that uses the **square root** link function does the best job modelling the data. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
+
+```{r cs-re-fit-model-2}
+cs.model.1.sqrt <- cs.model.1.sqrt %>% update(REML = TRUE)
+``` 
+
+## Model re-validation {.tabset}
+
+### cs.model.1.sqrt [performance]
+
+```{r cs-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+cs.model.1.sqrt %>% check_model()
+```
+
+### cs.model.1.sqrt [DHARMa]
+
+```{r cs-model-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+cs.model.1.sqrt %>% simulateResiduals(plot=TRUE)
+cs.model.1.sqrt %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### cs.model.1.sqrt [plot_model]
+```{r cs-model-re-validatiaon-3, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, fig.show='hold', out.width="50%"}
+par(mar=c(2,2,2,2))
+cs.model.1.sqrt %>% plot_model(type = "diag")
+```
+### {-}
+
+Model looks better but there are still some issues with it. Lets see if these issues can be sorted via transforming the data via a square-root function rather than via the link function. 
+
