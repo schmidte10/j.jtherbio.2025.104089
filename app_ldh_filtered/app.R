@@ -17,15 +17,11 @@ library(ggpubr)
 library(shinythemes)
 library(DT)
 #--- set directory ---# 
-setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/")
+setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/")
 
 #--- import data ---#
-WhiteMuscleAll <- read_delim("./LDH_Hunter_filtered.txt", 
-                         delim = "\t", escape_double = FALSE, 
-                         col_types = cols(`Sample index` = col_factor(levels = c("1", 
-                                                                                 "2", "3", "4", "5", "6")), `Sample ID 1` = col_factor(levels = c("1", 
-                                                                                                                                                  "2", "3", "4", "5", "6")), Result = col_number(), 
-                                          `Creation time` = col_datetime(format = "%d/%m/%Y %H:%M")), 
+WhiteMuscleAll <- read_delim("./import_files/LDH_Hunter_filtered.txt", 
+                         delim = "\t", escape_double = FALSE,  
                          trim_ws = TRUE)
 
 
@@ -42,26 +38,34 @@ WhiteMuscleAll2 <-
                      (SPECIES == "Pmol") ~ "Pomacentrus moluccensis",
                      (SPECIES == "Adoed") ~ "Apogon doederlein",
                      (SPECIES == "Arub") ~ "Apogon rubrimacula",
-                     TRUE ~ "unknown")) %>% 
-    rename(LATIN_NAME=`case_when(...)`, 
-           CUVETTE = `Sample index`, 
-           DATETIME = `Creation time`) %>% 
-    separate(DATETIME, into=c('DATE','TIME'), sep = " ", remove = FALSE) %>%  
-    arrange(CUVETTE, TIME)
+                     TRUE ~ "unknown"))
 
 WhiteMuscleAll3 <- WhiteMuscleAll2 %>% 
-    mutate(TIME = chron(times = WhiteMuscleAll2$TIME)) %>%
-    dplyr::group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
-    mutate(TIME_DIFF = TIME - first(TIME)) %>%  
-    ungroup() %>%
-    mutate(TIME_DIFF_SECS = period_to_seconds(hms(TIME_DIFF))) %>% 
-    mutate(MINUTES = TIME_DIFF_SECS/60) %>% 
-    mutate(MINUTES = round(MINUTES, digits = 2)) 
-
-WhiteMuscleAll3$CUVETTE <- paste("Cuvette", WhiteMuscleAll3$CUVETTE, sep="_") 
-WhiteMuscleAll3 <- WhiteMuscleAll3 %>% 
     mutate(CUVETTE = as.character(CUVETTE))
 
+#--- next file that contains all data points ---# 
+WhiteMuscleAll.original <- read_delim("./import_files/LDH_Hunter_processed.txt", 
+                                      delim = "\t", escape_double = FALSE, 
+                                      trim_ws = TRUE) 
+
+
+
+#--- separate sample column into useful data ---# 
+WhiteMuscleAll2.original <-  
+  WhiteMuscleAll.original %>% 
+  separate(sample, c("MUSCLE_TYPE", "SPECIES", "SAMPLE_NO", "TEMPERATURE"), sep="_", remove = FALSE)  %>%
+  unite("UNIQUE_SAMPLE_ID", c(MUSCLE_TYPE,SPECIES,SAMPLE_NO,TEMPERATURE), sep = "_", remove = FALSE) %>% 
+  mutate(case_when((SPECIES == "Paus") ~ "Pomacentrus australis", 
+                   (SPECIES == "Apoly") ~ "Acanthochromis polyacanthus",
+                   (SPECIES == "Pamo") ~ "Pomacentrus amoinensis",
+                   (SPECIES == "Pcoel") ~ "Pomacentrus coelestis",
+                   (SPECIES == "Pmol") ~ "Pomacentrus moluccensis",
+                   (SPECIES == "Adoed") ~ "Apogon doederlein",
+                   (SPECIES == "Arub") ~ "Apogon rubrimacula",
+                   TRUE ~ "unknown")) 
+
+WhiteMuscleAll3.original <- WhiteMuscleAll2.original %>% 
+  mutate(CUVETTE = as.character(CUVETTE))
 
 
 # Define UI for application that draws a histogram
@@ -137,17 +141,23 @@ server <- function(input, output, session) {
            SPECIES %in% input$SPECIES, 
            SAMPLE_NO %in% input$SAMPLE_NO)}) 
   
-  
+  WhiteMuscleAll3.original_Finder <- reactive({ 
+    req(input$TEMPERATURE)  
+    req(input$SPECIES)
+    filter(WhiteMuscleAll3.original, TEMPERATURE %in% input$TEMPERATURE, 
+           SPECIES %in% input$SPECIES, 
+           SAMPLE_NO %in% input$SAMPLE_NO)})
   
     output$plot <- renderPlot({ 
       input$TEMPERATURE
       input$SPECIES 
       input$SAMPLE_NO
         isolate({   
-            ggplot(WhiteMuscleAll3_Finder(),aes(MINUTES, Result)) + 
-            geom_point() +
+            ggplot(WhiteMuscleAll3_Finder(),aes(MINUTES, result)) + 
+            geom_smooth(method = "lm", color = "orange") +
+            geom_point(data = WhiteMuscleAll3.original_Finder(), mapping = aes(MINUTES, result), color = "red") + 
+            geom_point(color = "#000099") +
             facet_wrap(~CUVETTE) + 
-            geom_smooth(method = "lm") + 
             theme_bw() + 
             ylim(-0.3,3.5)+
             ggtitle(paste(WhiteMuscleAll3_Finder()[1,8])) + 
@@ -164,7 +174,7 @@ server <- function(input, output, session) {
       LDH_activity <- WhiteMuscleAll3_Finder() %>% 
         group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
         do({
-          mod = lm(Result ~ MINUTES, data = .)
+          mod = lm(result ~ MINUTES, data = .)
           data.frame(Intercept = coef(mod)[1],
                      Slope = coef(mod)[2], 
                      r2 = summary(mod)$r.squared)
@@ -172,9 +182,9 @@ server <- function(input, output, session) {
         ungroup() %>%
         datatable() %>%
         formatStyle('CUVETTE', target = "row",
-                    backgroundColor = styleEqual(c("Cuvette_1","Cuvette_2","Cuvette_3"), c('lightblue','lightblue','lightblue'))) %>% 
+                    backgroundColor = styleEqual(c("1","2","3"), c('lightblue','lightblue','lightblue'))) %>% 
         formatStyle('CUVETTE', target = "row",
-                    backgroundColor = styleEqual(c("Cuvette_5"), c('springgreen')))
+                    backgroundColor = styleEqual(c("5"), c('springgreen')))
     
 
      

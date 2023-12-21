@@ -160,11 +160,11 @@ ldh3.filtered <- ldh3 |>
 ```
 
 
-```{r save-file-1}
-ldh3.filtered.table <- ldh3.filtered %>% select(c(2:8,11:19)) 
-names(ldh3.filtered.table) <-  names(ldh)
-write.table(ldh3.filtered.table, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
-write.table(ldh3.filtered.table, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+```{r cs-save-file-1}
+write.table(ldh3.filtered, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(ldh3.filtered, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+write.table(ldh3, file = "./excel_files/LDH_Hunter_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(ldh3, file = "./import_files/LDH_Hunter_processed.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 ```
 Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and the calculate enzyme activity based on these slopes. This will involve a number of steps.  
 
@@ -269,6 +269,9 @@ ldh.data <- final_table %>%
                              species == "Pmol" ~ "tropical",
                              TRUE ~ "na")))
 ```
+
+
+
 
 All done! Ready for data analysis 
 
@@ -946,7 +949,7 @@ CS.data <- cs_final_table %>%
 ```
 
 
-```{r save-file-1}
+```{r cs-save-file-1}
 write.table(cs3.filtered, file = "./excel_files/Lauren_CS_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(cs3.filtered, file = "./import_files/Lauren_CS_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 write.table(cs3, file = "./excel_files/Lauren_CS_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")

@@ -147,7 +147,7 @@ server <- function(input, output, session) {
   WhiteMuscleAll3.original_Finder <- reactive({ 
     req(input$TEMPERATURE)  
     req(input$SPECIES)
-    filter(WhiteMuscleAll3.data, TEMPERATURE %in% input$TEMPERATURE, 
+    filter(WhiteMuscleAll3.original, TEMPERATURE %in% input$TEMPERATURE, 
            SPECIES %in% input$SPECIES, 
            SAMPLE_NO %in% input$SAMPLE_NO)})
   
@@ -187,9 +187,9 @@ server <- function(input, output, session) {
         ungroup() %>%
         datatable() %>%
         formatStyle('CUVETTE', target = "row",
-                    backgroundColor = styleEqual(c("Cuvette_1","Cuvette_2","Cuvette_3"), c('lightblue','lightblue','lightblue'))) %>% 
+                    backgroundColor = styleEqual(c("1","2","3"), c('lightblue','lightblue','lightblue'))) %>% 
         formatStyle('CUVETTE', target = "row",
-                    backgroundColor = styleEqual(c("Cuvette_5"), c('springgreen')))
+                    backgroundColor = styleEqual(c("5"), c('springgreen')))
     
 
      
