@@ -160,7 +160,7 @@ ldh3.filtered <- ldh3 |>
 ```
 
 
-```{r cs-save-file-1}
+```{r ldh-save-file-1}
 write.table(ldh3.filtered, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(ldh3.filtered, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 write.table(ldh3, file = "./excel_files/LDH_Hunter_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
@@ -786,7 +786,7 @@ Note that later on the first data point will be removed from all samples. For ex
 * **grp4**: removed first 4 data points which was causing a plateau
 * **grp5**: removed first 5 data points which was causing a plateau
 
-```{r data-manipulation-2, warning=FALSE, message=FALSE} 
+```{r cs-data-manipulation-2, warning=FALSE, message=FALSE} 
 grp1 <- c("Arub_06_30_3","Arub_04_30_3","Paus_02_30_2","Pmol_01_20_3","Pmol_03_30_1","Pmol_03_30_3") 
 grp2 <- c("Arub_04_30_3","Paus_02_30_1")
 grp3 <- c("Adoed_03_20_3","Pmol_03_30_2","Pmol_03_10_3") 
@@ -803,7 +803,7 @@ data.grp2 <- c("Pmol_05_20_3")
 ```
 
 
-```{r ldh-data-cleaning}
+```{r cs-data-cleaning}
 cs3.filtered <- cs3 |> 
   filter(!(UNIQUE_SAMPLE_ID %in% c(
                                    #--- Apogon rubrimacula ---#
@@ -875,7 +875,7 @@ CS_activity <- cs3.filtered %>%
 #### Step2: Slope means
 
 Step2 will calculate the mean slope for cuvette 1-3. 
-```{r data-calc-2}
+```{r cs-data-calc-2}
 CS_activity_means <- CS_activity %>% 
   group_by(UNIQUE_SAMPLE_ID) %>% 
   mutate(Mean = mean(Slope)) %>% 
@@ -885,7 +885,7 @@ CS_activity_means <- CS_activity %>%
 #### Step3: Background activity level
 
 Step3 will calculate background activity level by measuring the slope from cuvette 5 (postive control)
-```{r data-calc-3, warning=FALSE, message=FALSE}
+```{r cs-data-calc-3, warning=FALSE, message=FALSE}
 CS_background <- cs3.filtered %>% 
   group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
   do({
@@ -902,7 +902,7 @@ CS_background <- cs3.filtered %>%
 #### Step4: Merging dataframes
 
 Step4 will merge the data frames that you created with the mean slopes and the background slopes.
-```{r data-calc-4, warning=FALSE, message=FALSE}
+```{r cs-data-calc-4, warning=FALSE, message=FALSE}
 cs_final_table <- CS_activity %>% 
   full_join(distinct(CS_activity_means[,c(1,6)]), by = "UNIQUE_SAMPLE_ID") %>%
   full_join(CS_background[,c(1,4)], by = "UNIQUE_SAMPLE_ID") 
@@ -917,7 +917,7 @@ cs_final_table <- cs_final_table %>%
 #### Step5: Enzyme activity levels 
 
 Step5 is where enzyme activity levels are calculated. See further details in manuscript (doi: xxx). Within this step background activity level is taken into account and subtracted from slopes where background activity was >5% or more of the sample slope. 
-```{r data-calc-5, warning=FALSE, message=FALSE}
+```{r cs-data-calc-5, warning=FALSE, message=FALSE}
 CS.data <- cs_final_table %>% 
   select(c(UNIQUE_SAMPLE_ID, Mean, Background, Background_perc)) %>% 
   mutate(Mean = as.numeric(Mean), 
@@ -1102,7 +1102,7 @@ Turn **REML** off when comparing models
 
 ### re-fitting models [link functions]
 
-```{r ldh-re-fit-model-1}
+```{r cs-re-fit-model-1}
 cs.model.1.log <- cs.model.1 %>% update(family=gaussian(link="log")) 
 cs.model.1.sqrt <- cs.model.1 %>% update(family=gaussian(link="sqrt")) 
 ```
