@@ -22,7 +22,7 @@ setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/
 #--- import data ---#
 WhiteMuscleAll <- read_delim("import_files/Lauren_CS_filtered.txt", 
                              delim = "\t", escape_double = FALSE, 
-                             col_types = cols(`creation_time` = col_datetime(format = "%Y-%m-%d %H:%M:%S")), 
+                             col_types = cols(`creation_time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p")), 
                              trim_ws = TRUE)
 
 

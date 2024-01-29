@@ -25,7 +25,7 @@ WhiteMuscleAll <- read_delim("./Lauren_CS.txt",
                          col_types = cols(`Sample index` = col_factor(levels = c("1","2", "3", "4", "5", "6")), 
                                           `Sample ID 1` = col_factor(levels = c("1", "2", "3", "4", "5", "6")), 
                                           Result = col_number(), 
-                                          `...17` = col_skip(),
+                                          `...17` = col_skip(), `...18` = col_skip(), `...19` = col_skip(),
                                           `Creation time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p")), 
                          trim_ws = TRUE) 
 
