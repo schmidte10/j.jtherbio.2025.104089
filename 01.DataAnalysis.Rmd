@@ -672,10 +672,39 @@ ldh.sqrt.model.1.p2 %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, typ
 ldh.sqrt.model.1.p2 %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
 ```
 
+### temperture [combined]
+```{r rest-pairwise-3.5}
+ldh.means.temp <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response"); ldh.means.temp$emmeans
+
+ldh.means.temp.df <- ldh.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+ldh.means.temp.df[1,8] = 0.0000 
+
+ldh.means.temp.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+
 
 ### Means - f(temperature)
 ```{r rest-pairwise-4}
-ldh.means <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response"); ldh.means$emmeans
+ldh.means <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response")
+
+ldh.means.df <- ldh.means$emmeans %>% as.data.frame() %>% 
+  mutate("change"=response - lag(response, n=1, default = first(response)), 
+         "%change" = response/lag(response, n=1, default = first(response))*100) %>% 
+  mutate("%change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `%change`), 
+         "change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `change`)) %>% 
+  rename("\u394 %change" = "%change", 
+         "\u394 change" = "change")
+         
+ldh.means.df[10]
+
+ldh.means.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
 ```
 
 ### Abs. diff - f(temperature)
@@ -683,9 +712,26 @@ ldh.means <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperat
 ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
 ```
 
-### effect size
+### Genus comparisons
+```{r ldh-pairwise-6}
+ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS")) %>% summary(infer=TRUE, type = "response")
+```
+
+### Genus [combined]
+```{r ldh-pairwise-genus}
+ldh.means.genus <- ldh.sqrt.model.1.p2 %>% update(LDH_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ LATIN_GENUS, type = "response") %>% summary(infer=TRUE); ldh.means.genus
+
+```
+
+### effect size [emmeans]
 ```{r rmr-effect-size}
 ldh.emm <- ldh.sqrt.model.1.p2 %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
+eff_size(ldh.emm, sigma = sigma(ldh.sqrt.model.1.p2), edf=df.residual(ldh.sqrt.model.1.p2))
+```
+
+### effect size [emtrends]
+```{r ldh-effect-size}
+ldh.emm <- ldh.sqrt.model.1.p2 %>% emtrends(var = "temperature")
 eff_size(ldh.emm, sigma = sigma(ldh.sqrt.model.1.p2), edf=df.residual(ldh.sqrt.model.1.p2))
 ```
 
@@ -726,7 +772,7 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
   theme_classic() + 
   ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
@@ -1268,7 +1314,7 @@ The numbers in the left most column in the table just mention that the slopes ar
 
 ### emmeans 
 ```{r cs-pairwise-2}
-cs.model.1.p2.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+cs.model.1.p2.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid() %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
 ```
 
 ### temperature 
@@ -1276,6 +1322,23 @@ cs.model.1.p2.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type 
 cs.model.1.p2.log %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
 ```
 
+### temperture [combined]
+```{r cs-pairwise-3.5}
+cs.means.temp <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response") %>% summary(infer=TRUE)
+
+cs.means.temp.df <- cs.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+cs.means.temp.df[1,8] = 0.0000 
+
+cs.means.temp.df  
+```
+
+### Genus [combined]
+```{r cs-pairwise-genus}
+cs.means.genus <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ LATIN_GENUS, type = "response") %>% summary(infer=TRUE); cs.means.genus
+
+```
 
 ### Means - f(temperature)
 ```{r cs-pairwise-4}
@@ -1285,6 +1348,11 @@ cs.means <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LAT
 ### Abs. diff - f(temperature)
 ```{r cs-pairwise-5}
 cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
+```
+
+### Genus comparisons
+```{r cs-pairwise-6}
+cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS")) %>% summary(infer=TRUE, type = "response")
 ```
 
 ### effect size
@@ -1330,7 +1398,7 @@ cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, co
   theme_classic() + 
   ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+  scale_linetype_manual(values = c("solid", "solid", "dashed","dashed"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
@@ -1685,6 +1753,23 @@ lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS,
 lc.model.1.p2.gamma.log %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
 ```
 
+### temperture [combined]
+```{r lcr-pairwise-3.5}
+lc.means.temp <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response")
+
+lc.means.temp.df <- lc.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+lc.means.temp.df[1,8] = 0.0000 
+
+lc.means.temp.df  
+```
+
+### Genus [combined]
+```{r lcr-pairwise-genus}
+lc.means.genus <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ LATIN_GENUS, type = "response") %>% summary(infer=TRUE); lc.means.genus
+
+```
 
 ### Means - f(temperature)
 ```{r lcr-pairwise-4}
@@ -1738,7 +1823,7 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
   theme_classic() + 
   ylab(expression("LDH:CS (U mg "^{-1} * "tissue)")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
