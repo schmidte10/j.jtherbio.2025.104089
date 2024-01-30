@@ -392,7 +392,7 @@ Great! Now lets check our model validations to see how the model is performing.
 ### ldh.glmm.1.p2 [performance]
 
 ```{r model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
-ldh.glmm.1.p2 %>% check_model()
+ldh.glmm.1.p2 %>% check_model(detrend=FALSE)
 ```
 
 ### ldh.glmm.1.p2 [DHARMa]
@@ -413,8 +413,11 @@ Turn **REML** off when comparing models
 ### re-fitting models [link functions]
 
 ```{r ldh-re-fit-model-1}
-ldh.glmm.1.p2.log <- ldh.glmm.1.p2 %>% update(family=gaussian(link="log")) 
-ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2 %>% update(family=gaussian(link="sqrt")) 
+ldh.glmm.1.p2 <- ldh.glmm.1.p2 %>% update(REML=FALSE)
+ldh.glmm.1.p2.log <- ldh.glmm.1.p2 %>% update(family=gaussian(link="log"), 
+                                              REML=FALSE) 
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2 %>% update(family=gaussian(link="sqrt"), 
+                                               REML=FALSE) 
 ```
 
 ### re-fit model comparisons [link function]
@@ -434,7 +437,8 @@ model.fit.table %>% knitr::kable(format = "html")  %>%
 From this model comparison it looks like the model that uses the **square root** link function does the best job modelling the data. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
 
 ```{r ldh-re-fit-model-2}
-ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE)
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE, 
+                                                    dispformula=~1)
 ``` 
 
 ## Model re-validation {.tabset}
@@ -442,7 +446,7 @@ ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE)
 ### ldh.glmm.1.p2 [performance]
 
 ```{r ldh-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
-ldh.glmm.1.p2.sqrt %>% check_model()
+ldh.glmm.1.p2.sqrt %>% check_model(detrend=FALSE)
 ```
 
 ### ldh.glmm.1.p2 [DHARMa]
@@ -454,14 +458,16 @@ ldh.glmm.1.p2.sqrt %>% DHARMa::testResiduals(plot=TRUE)
 
 ### {-}
 
-Model looks better but there are still some issues with it. Because our data is all positive and has no zeros or negatives we can try to fit a Gamma model to see if that improves the model. 
+## Important note
+
+**NOTE:** The sqrt gaussian model actually performs pretty well. However, when we look at the model there are clear signs of heteroscadiscity within the data (i.e., increasing variation at higher dependent variable values). This seems to be feature of the enzyme data whereby at low temperatures there is very little activity, and therefore little variation within activity at 10, 20, and 30C. However as temperatures increase to 40 and 50C we start to see enzyme activities increase exponentially and begin to identify maximal enzyme activity. Here we would _expect_ to see more variation as we are beginning to see the difference different individuals have in maximum LDH activity. One could argue in continuing to use this more despite heteroscadiscity being seen within the data. However, there are a couple of options if one chooses to fix the issue. The first could be to try a different distribution, another could be to transform that data. Both options are explored below. While these options may help, I think it is important to think about whether or not we want increase variation at higher temperatures to be something that is included within our model as it may be a _feature_ of the model rather than an unwanted _artefact_ within the data.
 
 ## Model re-re-fit 
 
 ### Gamma models
 ```{r ldh-re-re-model-fit}
 ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = FALSE)
-ldh.glmm.1.p2.gamma <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="log"), 
+ldh.glmm.1.p2.gamma.log <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="log"), 
                                                      REML = FALSE)  
 ldh.glmm.1.p2.gamma.sqrt <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="sqrt"), 
                                                      REML = FALSE)  
@@ -469,13 +475,13 @@ ldh.glmm.1.p2.gamma.sqrt <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="s
 
 ### model comparisons - Gamma models 
 ```{r ldh-re-re-fit-model-comparisons, warning=FALSE}
-aic.c=AICc(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma,ldh.glmm.1.p2.gamma.sqrt,  k=2) 
-bic=BIC(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma, ldh.glmm.1.p2.gamma.sqrt)
+aic.c=AICc(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma.log,ldh.glmm.1.p2.gamma.sqrt,  k=2) 
+bic=BIC(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma.log, ldh.glmm.1.p2.gamma.sqrt)
 
 model.fit.table <- as.data.frame(aic.c) %>% 
   tibble::rownames_to_column("model") %>%
   mutate(BIC = bic$BIC, 
-         r2 = c(r.squaredGLMM(ldh.glmm.1.p2.sqrt)[1], r.squaredGLMM(ldh.glmm.1.p2.gamma)[1], "NA"))
+         r2 = c(r.squaredGLMM(ldh.glmm.1.p2.sqrt)[1], r.squaredGLMM(ldh.glmm.1.p2.gamma.log)[1], "NA"))
 model.fit.table %>% knitr::kable(format = "html")  %>%
   kable_paper(full_width = TRUE) 
 ```
@@ -485,7 +491,7 @@ model.fit.table %>% knitr::kable(format = "html")  %>%
 ### ldh.glmm.1.p2.gamma [performance]
 
 ```{r ldh-model-re-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
-ldh.glmm.1.p2.gamma.sqrt %>% check_model()
+ldh.glmm.1.p2.gamma.sqrt %>% check_model(detrend=FALSE)
 ```
 
 ### ldh.glmm.1.p2 [DHARMa]
@@ -498,7 +504,8 @@ ldh.glmm.1.p2.gamma.sqrt %>% DHARMa::testResiduals(plot=TRUE)
 
 ### {-}
 
-The Model still doesn't pass all the validation assumptions. We have tried a number of different links and distributions, and by doing so we have improved the model, but, it is still performing rather poorly. The best looking models were those that contained square-root links, so lets take a different approach and transform our data via a square root function, and then going through the model selection process with our newly transformed data. 
+## Important note 2
+The Gamma distribution does seem to improve the model, definitely helps solve the heteroscadisity problem, however, there are down sides. The gamma more with the square-root link doesn't seem to as good a job at handling data at the upper and lower ends of the spectrum as noted by the qq-plot in the performance package diagnostics. Also, the dispersion assumption within the DHARMa diagnositics is violated. Let's move on and see how the data transformation models perform. 
 
 ## Fit model [Transformed data]
 
@@ -547,9 +554,8 @@ ldh.sqrt.model.1.p2 <- glmmTMB(sqrt(LDH_ACTIVITY) ~ poly(temperature, 2) * LATIT
 
 ### ldh.sqrt.model.1.p2 [performance]
 
-```{r ldh-model-trans-validatiaon-1, warning=FALSE, message=FALSE, fig.width=16, fig.height= 12}
-ldh.sqrt.model.1.p2 %>% check_model()
-ldh.sqrt.model.1.p2 %>% check_collinearity()
+```{r ldh-model-trans-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.sqrt.model.1.p2 %>% check_model(detrend=FALSE)
 ```
 
 ### ldh.sqrt.model.1.p2 [DHARMa]
@@ -566,7 +572,11 @@ plot_model(ldh.sqrt.model.1.p2, type = "diag")[-2]
 
 ```
 
-The data looks much better and passes all the validations. 
+### {-}
+
+## Important note 3 
+
+It looks like transforming the data via a square root transformation really helps model performance. No significant data violations occur and the diagnostic plots start to look a lot better. This is definitely a viable and justifiable option. 
 
 ## Partial plots {.tabset} 
 
@@ -1297,8 +1307,8 @@ cs.emm.df <- cs.emm %>% as.data.frame() %>%
   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
 
 cs.obs <-  CS.data %>% 
-  mutate(Pred=predict(cs.model.1.p2.log, re.form=NA),
-         Resid = residuals(cs.model.1.p2.log),
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log,  type="response"),
          Fit = Pred + Resid) %>%
    unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
 
@@ -1314,9 +1324,9 @@ cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, co
               ymin= lower.CL, ymax= upper.CL),
               alpha = 0.2, 
               color=NA)+ 
-  scale_x_continuous(limits = c(9, 52), 
-                     breaks = seq(10, 52, by = 10))+ 
-  scale_y_continuous(limits = c(0,16), breaks = seq(0, 16, by = 2)) +
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,16), breaks = seq(0, 16, by = 2)) +
   theme_classic() + 
   ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
   xlab("")+
@@ -1493,8 +1503,6 @@ anova(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.sqrt, test = "Chisq")
 
 From our model outputs it looks like transforming the data via a log-link function seems to help. However, we will have to explore that data further as the r-squared value drops drastically
 
-### {-}
-
 ## Model re-validation {.tabset}
 
 ```{r lcr-re-fit-model}
@@ -1542,7 +1550,7 @@ lc.model.1.p2.gamma.log <- lc.model.1.p2 %>% update(family=Gamma(link="log"),
 
 ```{r lcr-re-re-fit-model-comparisons-1, warning=FALSE}
 aic.c=AICc(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log,   k=2) 
-bic=BIC(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log, )
+bic=BIC(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log )
 
 model.fit.table <- as.data.frame(aic.c) %>% 
   tibble::rownames_to_column("model") %>%
@@ -1560,7 +1568,7 @@ The gamma model seems to help when using a log. Lets look at the model validatio
 
 Turn REML on 
 
-```{r lcr-re-re-fit-model-1, warning=FALSE}
+```{r lcr-re-re-fit-model-1.1, warning=FALSE}
 lc.model.1.p2.gamma.log <- lc.model.1.p2.gamma.log %>% update(REML=TRUE) 
 ``` 
 
@@ -1591,25 +1599,25 @@ This model does not violate any assumptions and therefore we can start to look a
 
 #### TEMPERATURE V LATITUDE
 
-```{r cs-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+```{r lcr-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
 lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATITUDE) %>% plot(add.data=TRUE, jitter=c(0.05,0))
 ```
 
 #### TEMPERATURE V GENUS
 
-```{r cs-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+```{r lcr-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
 lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
 ```
 
 #### TEMPERATURE V GENUS V LATITUDE
 
-```{r cs-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+```{r lcr-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
 lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATITUDE|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
 ```
 
 ### plot_model 
 
-```{r cs-partial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
+```{r lcr-partial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
 lc.model.1.p2.gamma.log %>% plot_model(vline.color = "grey12", show.values=TRUE, sort.est = TRUE, value.offset = 0.3) 
 ```
 
@@ -1620,7 +1628,7 @@ lc.model.1.p2.gamma.log %>% plot_model(vline.color = "grey12", show.values=TRUE,
 ## Model investigation {.tabset .tabset-pills}
 
 ### summary 
-```{r cs-model-inv-1, echo=FALSE}
+```{r lcr-model-inv-1, echo=FALSE}
 as.data.frame(summary(lc.model.1.p2.gamma.log)$coefficients[1]) %>% 
   dplyr::rename( 
     Estimate = cond.Estimate,
@@ -1633,7 +1641,7 @@ as.data.frame(summary(lc.model.1.p2.gamma.log)$coefficients[1]) %>%
 ```
 
 ### anova 
-```{r cs-model-inv-2, echo=FALSE}
+```{r lcr-model-inv-2, echo=FALSE}
 lc.model.1.p2.gamma.log %>% Anova() %>% 
   as.data.frame() %>%
   knitr::kable(format = "html")  %>%
@@ -1641,7 +1649,7 @@ lc.model.1.p2.gamma.log %>% Anova() %>%
 ``` 
 
 ### confint 
-```{r cs-model-inv-3, echo=FALSE}
+```{r lcr-model-inv-3, echo=FALSE}
 lc.model.1.p2.gamma.log %>% confint() %>% 
   as.data.frame() %>%
   knitr::kable(format = "html")  %>%
@@ -1649,7 +1657,7 @@ lc.model.1.p2.gamma.log %>% confint() %>%
 ``` 
 
 ### r-squared
-```{r cs-model-inv-4, echo=FALSE}
+```{r lcr-model-inv-4, echo=FALSE}
 lc.model.1.p2.gamma.log %>% performance::r2_nakagawa() %>% 
   as.data.frame() %>%
   knitr::kable(format = "html")  %>%
@@ -1660,41 +1668,43 @@ lc.model.1.p2.gamma.log %>% performance::r2_nakagawa() %>%
 
 ### emtrends 
 
-```{r cs-pairwise-1}
-cs.model.1.p2.log %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```{r lcr-pairwise-1}
+lc.model.1.p2.gamma.log %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
 ```
 SCROLL TO THE RIGHT -->
 
 The numbers in the left most column in the table just mention that the slopes are assuming mean **MASS_CENTERED** and **RESTING_TIME_SEONDS** values when looking at differences between latitudinal slopes.
 
 ### emmeans 
-```{r cs-pairwise-2}
+```{r lcr-pairwise-2}
 lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
 ```
 
 ### temperature 
-```{r cs-pairwise-3}
+```{r lcr-pairwise-3}
 lc.model.1.p2.gamma.log %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
 ```
 
 
 ### Means - f(temperature)
-```{r cs-pairwise-4}
+```{r lcr-pairwise-4}
 lc.means <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response"); lc.means$emmeans
 ```
 
 ### Abs. diff - f(temperature)
-```{r cs-pairwise-5}
+```{r lcr-pairwise-5}
 lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
 ```
 
 ### effect size
-```{r cs-effect-size}
-cs.emm <- lc.model.1.p2.gamma.log %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
-eff_size(cs.emm, sigma = sigma(lc.model.1.p2.gamma.log), edf=df.residual(lc.model.1.p2.gamma.log))
+```{r lcr-effect-size}
+lc.emm <- lc.model.1.p2.gamma.log %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
+eff_size(lc.emm, sigma = sigma(lc.model.1.p2.gamma.log), edf=df.residual(lc.model.1.p2.gamma.log))
 ```
 
 ### {-}
+
+## Summary figure
 
 ```{r lc-sum-fig, fig.width=8, fig.height=6, echo=TRUE, hide=TRUE}
 lc.emm <- emmeans(lc.model.1.p2.gamma.log, ~temperature|LATITUDE|LATIN_GENUS, 
