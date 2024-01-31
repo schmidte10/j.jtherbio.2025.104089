@@ -60,6 +60,7 @@ library(vtable) # creating tables
 library(modelr) # model validation
 library(kableExtra) # formatting output tables
 library(sjPlot) # plotting models
+library(ggpmisc) # plotting linear equations on figures
 ```
 
 # Lactate dehydrogenase (LDH)
@@ -160,7 +161,7 @@ ldh3.filtered <- ldh3 |>
 ```
 
 
-```{r ldh-save-file-1}
+```{r ldh-save-file-1, eval=FALSE}
 write.table(ldh3.filtered, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(ldh3.filtered, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 write.table(ldh3, file = "./excel_files/LDH_Hunter_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
@@ -269,9 +270,6 @@ ldh.data <- final_table %>%
                              species == "Pmol" ~ "tropical",
                              TRUE ~ "na")))
 ```
-
-
-
 
 All done! Ready for data analysis 
 
@@ -749,7 +747,7 @@ ldh.emm.df <- ldh.emm %>% as.data.frame() %>%
   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
 
 ldh.obs <-  ldh.data %>% 
-  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA),
+  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA, type="response"),
          Resid = residuals(ldh.sqrt.model.1.p2),
          Fit = Pred + Resid) %>%
    unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
@@ -783,6 +781,40 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
         legend.title = element_blank(), 
         axis.title = element_text(size =12), 
         axis.text = element_text(size=10)); ldh.plot
+```
+
+## Arrhenius plot 
+```{r ldh-arrhenius plot}
+
+ldh.arrhenius.plot <- ggplot(ldh.emm.df, aes(y=log(response), x=1/(temperature+273.15), linetype=species, color = species, fill=species))+
+  geom_jitter(data=ldh.obs, 
+              aes(y=log(Fit^2), color = species), 
+              #width=0.005, 
+              alpha = 0.3, 
+              size = 2) +
+  stat_poly_line(method="lm", se = TRUE) + 
+  stat_poly_eq(use_label(c("eq", "R2")), hjust = -1.6)+
+  #geom_ribbon(aes(x=1/(temperature+273.15), 
+              #ymin= log(asymp.LCL), ymax= log(asymp.UCL)),
+              #alpha = 0.2, 
+              #color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("log(LDH (U mg "^{-1} * "tissue))")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldh.arrhenius.plot
 ```
 
 # Citrate synthase (CS)
@@ -1022,7 +1054,7 @@ CS.data <- cs_final_table %>%
 ```
 
 
-```{r cs-save-file-1, echo=FALSE, hide=TRUE}
+```{r cs-save-file-1, echo=FALSE, hide=TRUE, eval = FALSE}
 write.table(cs3.filtered, file = "./excel_files/Lauren_CS_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
 write.table(cs3.filtered, file = "./import_files/Lauren_CS_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
 write.table(cs3, file = "./excel_files/Lauren_CS_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
@@ -1410,6 +1442,40 @@ cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, co
         axis.title = element_text(size =12), 
         axis.text = element_text(size=10)); cs.plot
 ```
+
+## Arrhenius plot 
+```{r cs-arrhenius plot, hide=TRUE}
+
+cs.arrhenius.plot <- ggplot(cs.emm.df, aes(y=log(response), x=1/(temperature+273.15), linetype=species, color = species, fill=species))+
+  geom_jitter(data=cs.obs, 
+              aes(y=log(Fit), color = species), 
+              #width=0.005, 
+              alpha = 0.3, 
+              size = 2) +
+  stat_poly_line(method="lm", se = TRUE) + 
+  stat_poly_eq(use_label(c("eq", "R2")), hjust = -1.6)+
+  #geom_ribbon(aes(x=1/(temperature+273.15), 
+              #ymin= log(asymp.LCL), ymax= log(asymp.UCL)),
+              #alpha = 0.2, 
+              #color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("log(CS (U mg "^{-1} * "tissue))")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); cs.arrhenius.plot
+```
  
 # CS:LDH ratio 
 
@@ -1745,7 +1811,7 @@ The numbers in the left most column in the table just mention that the slopes ar
 
 ### emmeans 
 ```{r lcr-pairwise-2}
-lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid() %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
 ```
 
 ### temperature 
@@ -1773,7 +1839,20 @@ lc.means.genus <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature)
 
 ### Means - f(temperature)
 ```{r lcr-pairwise-4}
-lc.means <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response"); lc.means$emmeans
+lc.means <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") 
+
+lc.means.df <- lc.means$emmeans %>% as.data.frame() %>% 
+  mutate("change"=response - lag(response, n=1, default = first(response)), 
+         "%change" = response/lag(response, n=1, default = first(response))*100) %>% 
+  mutate("%change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `%change`), 
+         "change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `change`)) %>% 
+  rename("\u394 %change" = "%change", 
+         "\u394 change" = "change")
+
+lc.means.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
 ```
 
 ### Abs. diff - f(temperature)
@@ -1821,7 +1900,7 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
                      #breaks = seq(10, 52, by = 10))+ 
   #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
   theme_classic() + 
-  ylab(expression("LDH:CS (U mg "^{-1} * "tissue)")) + 
+  ylab(expression("log(LDH:CS (U mg "^{-1} * "tissue))")) + 
   xlab("")+
   scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
                         labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
@@ -1834,4 +1913,15 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
         legend.title = element_blank(), 
         axis.title = element_text(size =12), 
         axis.text = element_text(size=10)); lc.plot
+```
+
+
+
+# Descriptive statistics 
+
+```{r descriptive statistics}
+lc.data2 <- lc.data %>% select(c("LATIN_NAME", "temperature", "CS_ACTIVITY", "LDH_ACTIVITY", "LDHCS")) %>% 
+  pivot_longer(!c(LATIN_NAME,temperature), names_to = "enzyme")
+table(lc.data2$LATIN_NAME,lc.data2$temperature, lc.data2$enzyme) %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
 ```
