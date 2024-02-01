@@ -770,12 +770,12 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
   theme_classic() + 
   ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) + 
   theme(legend.position = "top", 
         legend.text = element_text(size = 10), 
         legend.title = element_blank(), 
@@ -804,12 +804,12 @@ ldh.arrhenius.plot <- ggplot(ldh.emm.df, aes(y=log(response), x=1/(temperature+2
   theme_classic() + 
   ylab(expression("log(LDH (U mg "^{-1} * "tissue))")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) + 
   theme(legend.position = "top", 
         legend.text = element_text(size = 10), 
         legend.title = element_blank(), 
@@ -1430,12 +1430,12 @@ cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, co
   theme_classic() + 
   ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "solid", "dashed","dashed"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
   theme(legend.position = "top", 
         legend.text = element_text(size = 10), 
         legend.title = element_blank(), 
@@ -1464,12 +1464,12 @@ cs.arrhenius.plot <- ggplot(cs.emm.df, aes(y=log(response), x=1/(temperature+273
   theme_classic() + 
   ylab(expression("log(CS (U mg "^{-1} * "tissue))")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
   theme(legend.position = "top", 
         legend.text = element_text(size = 10), 
         legend.title = element_blank(), 
@@ -1902,12 +1902,12 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
   theme_classic() + 
   ylab(expression("log(LDH:CS (U mg "^{-1} * "tissue))")) + 
   xlab("")+
-  scale_linetype_manual(values = c("solid", "solid","dashed", "dashed"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) +
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
   scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
-                        labels = c("Apogon rubrimacula","Apogon doederlein","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
   theme(legend.position = "top", 
         legend.text = element_text(size = 10), 
         legend.title = element_blank(), 
