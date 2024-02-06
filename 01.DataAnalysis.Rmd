@@ -59,7 +59,7 @@ library(ggeffects) # plotting models/model validation
 library(vtable) # creating tables
 library(modelr) # model validation
 library(kableExtra) # formatting output tables
-library(sjPlot) # plotting models
+library(sjPlot) # plotting models & saving images as .svg
 library(ggpmisc) # plotting linear equations on figures
 ```
 
@@ -247,7 +247,8 @@ ldh.data <- final_table %>%
          LDH_ABSORBANCE = Mean - Background2) %>%
   drop_na() %>% 
   inner_join(select(ldh3.filtered, c(UNIQUE_SAMPLE_ID, species, replicate, temperature, LATIN_NAME)), by ="UNIQUE_SAMPLE_ID") %>% 
-  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE) %>%
+  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE)%>% 
+  filter(fish_id != "Paus_07") %>%
   inner_join(tissue.mass, by = "fish_id") %>% 
   mutate(TISSUE_MASS_CENTERED = scale(tissue_mass, center = TRUE, scale = FALSE)) %>%
   distinct(UNIQUE_SAMPLE_ID, .keep_all = TRUE) %>% 
@@ -268,7 +269,7 @@ ldh.data <- final_table %>%
                              species == "Arub" ~ "tropical", 
                              species == "Paus" ~ "sub-tropical",
                              species == "Pmol" ~ "tropical",
-                             TRUE ~ "na")))
+                             TRUE ~ "na"))) 
 ```
 
 All done! Ready for data analysis 
@@ -435,8 +436,7 @@ model.fit.table %>% knitr::kable(format = "html")  %>%
 From this model comparison it looks like the model that uses the **square root** link function does the best job modelling the data. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
 
 ```{r ldh-re-fit-model-2}
-ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE, 
-                                                    dispformula=~1)
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE)
 ``` 
 
 ## Model re-validation {.tabset}
@@ -875,7 +875,7 @@ Note that later on the first data point will be removed from all samples. For ex
 * **grp5**: removed first 5 data points which was causing a plateau
 
 ```{r cs-data-manipulation-2, warning=FALSE, message=FALSE} 
-grp1 <- c("Arub_06_30_3","Arub_04_30_3","Paus_02_30_2","Pmol_01_20_3","Pmol_03_30_1","Pmol_03_30_3", 
+grp1 <- c("Arub_04_30_3","Paus_02_30_2","Pmol_01_20_3","Pmol_03_30_1","Pmol_03_30_3", 
           "Paus_08_10_2", "Paus_10_40_1", "Pmol_07_20_2","Pmol_09_10_1","Arub_06_30_3",
           "Pmol_10_20_1") 
 grp2 <- c("Arub_04_30_3","Paus_02_30_1","Pmol_06_30_1","Pmol_10_10_1","Pmol_10_10_2", 
@@ -910,7 +910,9 @@ cs3.filtered <- cs3 |>
                                    "Arub_04_20_1", "Arub_04_20_2", "Arub_04_20_3", # slopes are all negative
                                    "Arub_05_30_1", "Arub_05_30_2", "Arub_05_30_3", # control slope steep 
                                    "Arub_06_20_1", "Arub_06_20_2", "Arub_06_20_3", # slopes all negative
-                                   "Arub_10_30_3",
+                                   "Arub_10_30_3", 
+                                   "Arub_01_50_1", "Arub_01_50_2", "Arub_01_50_3", # slopes look fine but are much shallower 
+                                                                                   # than all other samples
                                    
                                    #--- Apogon doederlein ---# 
                                    "Adoed_09_10_1", 
@@ -925,7 +927,9 @@ cs3.filtered <- cs3 |>
                                    "Pmol_02_20_1", "Pmol_02_20_2", "Pmol_02_20_3", 
                                    "Pmol_03_20_1", "Pmol_03_20_3", "Pmol_03_10_2",
                                    "Pmol_04_20_2", 
-                                   "Pmol_06_50_3", 
+                                   "Pmol_05_20_1", "Pmol_05_20_2",
+                                   "Pmol_06_50_3",
+                                   "Pmol_06_20_2", 
                                    "Pmol_04_10_2"
                                    ))) |>
   dplyr::group_by(UNIQUE_SAMPLE_ID) |> 
@@ -1015,7 +1019,15 @@ cs_final_table$Background[duplicated(cs_final_table$Background)] <- ""
 cs_final_table <- cs_final_table %>% 
   mutate(Mean = as.numeric(Mean), 
          Background = as.numeric(Background), 
-         Background_perc = Background/Mean) 
+         Background_perc = Background/Mean) %>% 
+  drop_na(Mean) %>% 
+  mutate(Background_perc = case_when(UNIQUE_SAMPLE_ID == "Adoed_03_40" ~ 0.0000, # ignore blank - QC
+                                     UNIQUE_SAMPLE_ID == "Pmol_07_30" ~ 0.0000, 
+                                     UNIQUE_SAMPLE_ID == "Arub_03_50" ~ 0.0000, 
+                                     UNIQUE_SAMPLE_ID == "Paus_07_10" ~ 0.0000,
+                                     UNIQUE_SAMPLE_ID == "Paus_02_10" ~ 0.0000,
+                                     UNIQUE_SAMPLE_ID == "Adoed_06_10" ~ 0.0000,
+                                     TRUE ~ Background_perc))
 ```
 
 #### Step5: Enzyme activity levels 
