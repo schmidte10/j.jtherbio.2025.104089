@@ -12,20 +12,24 @@ library(readr)
 library(tidyverse)
 library(chron)
 library(lubridate)
-library(shiny)
+#library(shiny)
 library(ggpubr)
 library(shinythemes)
 library(DT)
+library(Rcpp)
 #--- set directory ---# 
-setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/")
+#setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/")
 
 #--- import data ---#
-WhiteMuscleAll <- read_delim("import_files/Lauren_CS_filtered.txt", 
+#WhiteMuscleAll <- read_delim("import_files/Lauren_CS_filtered.txt", 
+                             #delim = "\t", escape_double = FALSE, 
+                             #col_types = cols(`creation_time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p")), 
+                             #trim_ws = TRUE)
+
+WhiteMuscleAll <- read_delim("Lauren_CS_filtered.txt", 
                              delim = "\t", escape_double = FALSE, 
                              col_types = cols(`creation_time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p")), 
                              trim_ws = TRUE)
-
-
 
 #--- separate sample column into useful data ---# 
 WhiteMuscleAll2 <-  
@@ -46,12 +50,15 @@ WhiteMuscleAll3 <- WhiteMuscleAll2 %>%
 
 #### ---- all points ---####
 #--- import data ---#
-WhiteMuscleAll.original <- read_delim("./import_files/Lauren_CS_processed.txt", 
+#WhiteMuscleAll.original <- read_delim("./import_files/Lauren_CS_processed.txt", 
+                                      #delim = "\t", escape_double = FALSE, 
+                                      #col_types = cols(`creation_time` = col_datetime(format = "%Y-%m-%d %H:%M:%S")), 
+                                      #trim_ws = TRUE) 
+
+WhiteMuscleAll.original <- read_delim("Lauren_CS_processed.txt", 
                                       delim = "\t", escape_double = FALSE, 
                                       col_types = cols(`creation_time` = col_datetime(format = "%Y-%m-%d %H:%M:%S")), 
                                       trim_ws = TRUE) 
-
-
 
 #--- separate sample column into useful data ---# 
 WhiteMuscleAll2.original <-  
@@ -80,7 +87,7 @@ ui <- fluidPage(
   #),
     # Application title
   navbarPage("Enzyme Quailty Checks", theme = shinytheme("yeti"),
-             tabPanel("White Muscle Data", fluid = TRUE, icon = icon("fish"), 
+             tabPanel("White Muscle Data (Citrate synthase)", fluid = TRUE, icon = icon("fish"), 
                       
   
 
@@ -103,9 +110,9 @@ ui <- fluidPage(
                                                             # "GILLS" = "Gilss")),
             selectInput("SPECIES", "species:", 
                         c("Pomacentrus australis" = "Paus",
-                          "Acanthochromis polyacanthus"= "Apoly",
-                          "Pomacentrus amoinensis"= "Pamo",
-                          "Pomacentrus coelestis"= "Pcoel",
+                          #"Acanthochromis polyacanthus"= "Apoly",
+                          #"Pomacentrus amoinensis"= "Pamo",
+                          #"Pomacentrus coelestis"= "Pcoel",
                           "Pomacentrus moluccensis"= "Pmol",
                           "Apogon doederlein"= "Adoed",
                           "Apogon rubrimacula"= "Arub"
@@ -153,29 +160,29 @@ server <- function(input, output, session) {
   
   
   
-    output$plot <- renderPlot({ 
-      input$TEMPERATURE
-      input$SPECIES 
-      input$SAMPLE_NO
-        isolate({   
-            ggplot(WhiteMuscleAll3_Finder(),aes(MINUTES, result)) + 
-            geom_point(data = WhiteMuscleAll3.original_Finder(), mapping = aes(MINUTES, result), color = "red") +
-            geom_point(color = "blue") +
-            facet_wrap(~CUVETTE) + 
-            geom_smooth(method = "lm") + 
-            theme_bw() + 
-            #ylim(-0.3,3)+
-            ggtitle(paste(WhiteMuscleAll3_Finder()[1,8])) + 
-            stat_regline_equation(label.y = 0.7) + 
-            stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), 
-                     label.y = 0.4)})
-    }, height = 420, width = 700)  
+  output$plot <- renderPlot({ 
+    input$TEMPERATURE
+    input$SPECIES 
+    input$SAMPLE_NO
+    isolate({   
+      ggplot(WhiteMuscleAll3_Finder(),aes(MINUTES, result)) + 
+        geom_point(data = WhiteMuscleAll3.original_Finder(), mapping = aes(MINUTES, result), color = "red") +
+        geom_point(color = "blue") +
+        facet_wrap(~CUVETTE) + 
+        geom_smooth(method = "lm") + 
+        theme_bw() + 
+        #ylim(-0.3,3)+
+        ggtitle(paste(WhiteMuscleAll3_Finder()[1,8])) + 
+        stat_regline_equation(label.y = 0.7) + 
+        stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), 
+                 label.y = 0.4)})
+  }, height = 420, width = 700)  
     
     output$mytable = DT::renderDataTable({ 
       input$TEMPERATURE 
       input$SPECIES 
       input$SAMPLE_NO
-
+      
       CS_activity <- WhiteMuscleAll3_Finder() %>% 
         group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
         do({
@@ -190,10 +197,10 @@ server <- function(input, output, session) {
                     backgroundColor = styleEqual(c("1","2","3"), c('lightblue','lightblue','lightblue'))) %>% 
         formatStyle('CUVETTE', target = "row",
                     backgroundColor = styleEqual(c("5"), c('springgreen')))
-    
-
-     
-}) 
+      
+      
+      
+    }) 
 
 }
 # Run the application 

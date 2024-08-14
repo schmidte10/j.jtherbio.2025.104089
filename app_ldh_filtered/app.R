@@ -12,17 +12,22 @@ library(readr)
 library(tidyverse)
 library(chron)
 library(lubridate)
-library(shiny)
+#library(shiny)
 library(ggpubr)
 library(shinythemes)
 library(DT)
+library(Rcpp)
 #--- set directory ---# 
-setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/")
+#setwd("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/")
 
 #--- import data ---#
-WhiteMuscleAll <- read_delim("./import_files/LDH_Hunter_filtered.txt", 
-                         delim = "\t", escape_double = FALSE,  
-                         trim_ws = TRUE)
+#WhiteMuscleAll <- read_delim("./import_files/LDH_Hunter_filtered.txt", 
+                        # delim = "\t", escape_double = FALSE,  
+                        # trim_ws = TRUE)
+
+WhiteMuscleAll <- read_delim("LDH_Hunter_filtered.txt", 
+ delim = "\t", escape_double = FALSE,  
+ trim_ws = TRUE)
 
 
 
@@ -44,11 +49,14 @@ WhiteMuscleAll3 <- WhiteMuscleAll2 %>%
     mutate(CUVETTE = as.character(CUVETTE))
 
 #--- next file that contains all data points ---# 
-WhiteMuscleAll.original <- read_delim("./import_files/LDH_Hunter_processed.txt", 
+#WhiteMuscleAll.original <- read_delim("./import_files/LDH_Hunter_processed.txt", 
+                                      #delim = "\t", escape_double = FALSE, 
+                                      #trim_ws = TRUE) 
+
+
+WhiteMuscleAll.original <- read_delim("LDH_Hunter_processed.txt", 
                                       delim = "\t", escape_double = FALSE, 
                                       trim_ws = TRUE) 
-
-
 
 #--- separate sample column into useful data ---# 
 WhiteMuscleAll2.original <-  
@@ -77,7 +85,7 @@ ui <- fluidPage(
   #),
     # Application title
   navbarPage("Enzyme Quailty Checks", theme = shinytheme("yeti"),
-             tabPanel("White Muscle Data", fluid = TRUE, icon = icon("fish"), 
+             tabPanel("White Muscle Data (Lactate dehydrogenase)", fluid = TRUE, icon = icon("fish"), 
                       
   
 
@@ -100,9 +108,9 @@ ui <- fluidPage(
                                                             # "GILLS" = "Gilss")),
             selectInput("SPECIES", "species:", 
                         c("Pomacentrus australis" = "Paus",
-                          "Acanthochromis polyacanthus"= "Apoly",
-                          "Pomacentrus amoinensis"= "Pamo",
-                          "Pomacentrus coelestis"= "Pcoel",
+                          #"Acanthochromis polyacanthus"= "Apoly",
+                          #"Pomacentrus amoinensis"= "Pamo",
+                          #"Pomacentrus coelestis"= "Pcoel",
                           "Pomacentrus moluccensis"= "Pmol",
                           "Apogon doederlein"= "Adoed",
                           "Apogon rubrimacula"= "Arub"

@@ -1,0 +1,2409 @@
+---
+title: "01. Chapter5 - Interspecific variation in enzyme thermal performance curves"
+author: " "
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    keep_md: yes
+    code_folding: show
+    collapse: no
+    df_print: paged
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 6
+    highlight: monochrome
+    theme: cerulean
+    latex_engine: xelatex
+    toc: yes
+    toc_float: yes
+    css: styles.css
+  pdf_document:
+    df_print: default
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 4
+    highlight: tango
+    latex_engine: xelatex
+    number_sections: yes
+    toc_depth: 2
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+classoption: a4paper
+---
+
+# Scenario 
+
+Understanding thermal perfomance curves of anaerobic and aerobic enzymes can help identify intrespecific differences in thermal tolerance. In this study four different species including, _Apogon rubrimacula_, _Apogon doederlein_, _Pomeacentrus australia_, and _Pomacentrus moluccensis_ had white muscle tissue samples collected, and used to determine thermal performance curves of two enzymes - lactate dehydrogenase (LDH) and citrate synthase (CS). Each enzyme was tested over five different temperatures including, 10$^\circ$C, 20$^\circ$C, 30$^\circ$C, 40$^\circ$C, and 50$^\circ$C, to create a thermal performance curve. Species in this study consisted for two cardinalfish and damselfish species, with different levels of reliance on coral reef structures. Results from this study will help determine interspecific differences in energetic metabolism in multiple coral reef species to help understand how different species may respond differently to changing environmental conditions. 
+
+# Load packages 
+
+```{r load-packages, warning=FALSE, message=FALSE}
+library(tidyverse) # data manipulation
+library(janitor) # data manipulation
+library(chron) # data manipulation - time data
+library(lubridate) # data manipulation - specifically time data
+library(ggplot2) # plotting figures
+library(glmmTMB) # running models
+library(performance) # model validation
+library(car) # dependent
+library(DHARMa) # model validation
+library(MuMIn) # model validation
+library(kableExtra) # creating tables
+library(broom) # dependent
+library(emmeans) # post-hoc analysis
+library(ggeffects) # plotting models/model validation
+library(vtable) # creating tables
+library(modelr) # model validation
+library(kableExtra) # formatting output tables
+library(sjPlot) # plotting models & saving images as .svg
+library(ggpmisc) # plotting linear equations on figures 
+library(ggpubr) # combining multiple plots
+```
+
+# Lactate dehydrogenase (LDH)
+
+## Read in the data
+
+```{r ldh-set-dir-hide, include=FALSE}
+working.dir = "C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/"
+```
+
+```{r ldh-set_dir}
+knitr::opts_knit$set(root.dir=working.dir)
+```
+
+## Load data 
+```{r ldh-import-data-hide, include=FALSE}
+import.data = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/LDH_Hunter.txt") 
+import.data2 = read.delim("C:/Users/jc527762/OneDrive - James Cook University/PhD dissertation/Data/Chapter5_Enzymes/import_files/tissue_mass.txt")  
+import.data3 <- read_delim("import_files/fish_mass_enzymes.txt", 
+    delim = "\t", escape_double = FALSE, 
+    col_types = cols(standard_length = col_number(), 
+        mass = col_number()), trim_ws = TRUE) %>% 
+  unite("fish_id", c("species","replicate"), remove=FALSE) %>% 
+  mutate(fish_id=factor(fish_id))
+```
+
+```{r ldh-load-data}
+ldh <- import.data
+tissue.mass <- import.data2
+fish_mass <- import.data3
+``` 
+
+## Data manipulation 
+
+```{r ldh-data-manipulation-1, warning=FALSE, message=FALSE}
+#--- data preparation/manipulation ---# 
+ldh2 <- ldh |>
+  clean_names() |>
+  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |> 
+  mutate(creation_time = dmy_hm(creation_time)) |>
+  separate(creation_time, into=c('DATE','TIME'), sep = " ", remove = FALSE) |>
+  arrange(sample_id_1, DATE, TIME) 
+
+ldh3 <- ldh2 |> 
+  mutate(TIME = hms(ldh2$TIME)) |>
+  mutate(TIME = chron(times=ldh2$TIME)) |>
+  arrange(TIME) |>
+  dplyr::group_by(sample, sample_id_1) |> 
+  dplyr::mutate(TIME_DIFF = TIME - first(TIME)) |> 
+  dplyr::filter(TIME != first(TIME)) |>
+  dplyr::ungroup() |> 
+  mutate(TIME_DIFF_SECS = period_to_seconds(hms(TIME_DIFF))) |> 
+  mutate(MINUTES = TIME_DIFF_SECS/60) |> 
+  mutate(MINUTES = round(MINUTES, digits = 2)) |> 
+  dplyr::rename(CUVETTE = sample_id_1) |> 
+  mutate(LATIN_NAME = case_when( species =="Adoed"~ "Apogon doederlein", 
+                             species == "Arub" ~ "Apogon rubrimacula", 
+                             species == "Paus" ~ "Pomacentrus australis",
+                             species == "Pmol" ~ "Pomacentrus moluccensis",
+                             TRUE ~ "na")) |> 
+  unite("UNIQUE_SAMPLE_ID", c(species, replicate, temperature, sample_index), sep="_", remove = FALSE)
+```
+
+### Data cleaning 
+
+Data points have been checked using previously written app script that allows the user to look at the plotted points of samples that were run. Because we are interested in the slope, points that plateaued were removed from the analysis, as it signifies that the reaction ran out of 'fuel' to use.
+
+* **grp1**: removed last data point which was causing a plateau
+* **grp2**: removed last 2 data points which was causing a plateau
+* **grp3**: removed last 3 data points which was causing a plateau
+* **grp4**: removed last 4 data points which was causing a plateau
+* **grp5**: removed last 5 data points which was causing a plateau
+
+```{r data-manipulation-2, warning=FALSE, message=FALSE} 
+grp1 <- c() 
+grp2 <- c("Paus_07_50_1","Paus_07_50_2","Paus_07_50_3","Paus_08_50_1","Paus_08_50_2","Paus_08_50_3", 
+          "Pmol_06_50_1","Pmol_06_50_2","Pmol_06_50_3", "Pmol_08_50_1","Pmol_08_50_2","Pmol_08_50_3", 
+          "Pmol_09_50_1","Pmol_09_50_2","Pmol_09_50_3")
+grp3 <- c() 
+grp4 <- c("Adoed_05_50_1","Adoed_05_50_2","Adoed_05_50_3", "Adoed_09_50_1","Adoed_09_50_2","Adoed_09_50_3") 
+grp5 <- c("Arub_08_50_1","Arub_08_50_2","Arub_08_50_3", "Arub_07_50_1","Arub_07_50_2","Arub_07_50_3", 
+          "Adoed_04_50_1","Adoed_04_50_2","Adoed_04_50_3", "Adoed_06_50_1","Adoed_06_50_2","Adoed_06_50_3", 
+          "Adoed_07_50_1","Adoed_07_50_2","Adoed_07_50_3", "Adoed_08_50_1","Adoed_08_50_2","Adoed_08_50_3", 
+          "Adoed_10_50_1","Adoed_10_50_2","Adoed_10_50_3", "Pmol_01_50_1","Pmol_01_50_2","Pmol_01_50_3")  
+grp6 <- c() 
+grp7 <- c() 
+grp8 <- c("Adoed_02_50_1","Adoed_02_50_2","Adoed_02_50_3") 
+```
+
+
+```{r ldh-data-cleaning, warning=FALSE, message=FALSE}
+ldh3.filtered <- ldh3 |> 
+  filter(!(UNIQUE_SAMPLE_ID %in% c("Arub_08_30_2", "Arub_06_40_2", "Arub_04_10_1", "Arub_02_40_2", 
+                                   "Adoed_03_30_2", "Adoed_04_40_1", "Adoed_08_30_2", 
+                                   "Paus_10_20_2", 
+                                   "Pmol_03_40_3", "Pmol_04_50_3", "Pmol_05_30_2"))) |>
+  dplyr::group_by(UNIQUE_SAMPLE_ID) |> 
+  arrange(UNIQUE_SAMPLE_ID, TIME) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp2 & row_number() > (n() - 2))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp4 & row_number() > (n() - 4))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp5 & row_number() > (n() - 5))) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp8 & row_number() > (n() - 8))) |> 
+  dplyr::ungroup() |> 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3))
+```
+
+
+```{r ldh-save-file-1, eval=FALSE}
+write.table(ldh3.filtered, file = "./excel_files/LDH_Hunter_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(ldh3.filtered, file = "./import_files/LDH_Hunter_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+write.table(ldh3, file = "./excel_files/LDH_Hunter_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(ldh3, file = "./import_files/LDH_Hunter_processed.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+```
+Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and the calculate enzyme activity based on these slopes. This will involve a number of steps.  
+
+### Data calculations 
+
+#### Step1: Extract slopes 
+
+Step1 will produce a data frame that provides you with the slope that was obtained for cuvettes 1-3 for each sample run at each experimental temperature. Note that at the end of this step we are removing slopes that were positive in value, as LDH slopes should produce a negative slope, due to NADH being used up. 
+```{r data-calc-1, warning=FALSE, message=FALSE}
+LDH_activity <- ldh3.filtered %>% 
+  dplyr::group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  dplyr::ungroup() %>%
+  filter(CUVETTE != ("6"))%>% 
+  filter(CUVETTE != ("4"))%>% 
+  filter(CUVETTE != ("5")) %>% 
+  filter(Slope <= 0)
+
+```
+
+#### Step2: Slope means
+
+Step2 will calculate the mean slope for cuvette 1-3. 
+```{r data-calc-2}
+LDH_activity_means <- LDH_activity %>% 
+  dplyr::group_by(UNIQUE_SAMPLE_ID) %>% 
+  dplyr::mutate(Mean = mean(Slope)) %>% 
+  ungroup()
+```
+
+#### Step3: Background activity level
+
+Step3 will calculate background activity level by measuring the slope from cuvette 5 (postive control)
+```{r data-calc-3, warning=FALSE, message=FALSE}
+LDH_background <- ldh3 %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2])
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE == ("5")) %>% 
+  dplyr::rename(Background = Slope) %>% 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3)) 
+```
+
+#### Step4: Merging dataframes
+
+Step4 will merge the data frames created with the mean slopes and the background slopes.
+```{r data-calc-4, warning=FALSE, message=FALSE}
+final_table <- LDH_activity %>% 
+  full_join(distinct(LDH_activity_means[,c(1,6)]), by = "UNIQUE_SAMPLE_ID") %>% 
+  full_join(LDH_background[,c(1,4)], by = "UNIQUE_SAMPLE_ID") 
+final_table$Mean[duplicated(final_table$Mean)] <- ""
+final_table$Background[duplicated(final_table$Background)] <- ""
+final_table <- final_table %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = Background/Mean) 
+```
+
+#### Step5: Enzyme activity levels 
+
+Step5 is where enzyme activity levels are calculated. Within this step background activity level is taken into account and subtracted from slopes where background activity was >5% or more of the sample slope. 
+```{r data-calc-5, warning=FALSE, message=FALSE}
+ldh.data <- final_table %>% 
+  select(c(UNIQUE_SAMPLE_ID, Mean, Background, Background_perc)) %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = as.numeric(Background_perc)) %>% 
+  mutate(Background2 = case_when(Background_perc <= 0.05 ~ 0, 
+                                    TRUE ~ Background), 
+         LDH_ABSORBANCE = Mean - Background2) %>%
+  drop_na() %>% 
+  inner_join(select(ldh3.filtered, c(UNIQUE_SAMPLE_ID, species, replicate, temperature, LATIN_NAME)), by ="UNIQUE_SAMPLE_ID") %>% 
+  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE)%>% 
+  filter(fish_id != "Paus_07") %>% # values appear to be outlier
+  inner_join(tissue.mass, by = "fish_id") %>% 
+  mutate(TISSUE_MASS_CENTERED = scale(tissue_mass, center = TRUE, scale = FALSE)) %>%
+  distinct(UNIQUE_SAMPLE_ID, .keep_all = TRUE) %>% 
+  mutate(PATH_LENGTH = 1, 
+         EXTINCTION_COEFFICIENT = 6.22, 
+         TISSUE_CONCENTRATION = 0.005, 
+         ASSAY_VOL = 0.975, 
+         SAMPLE_VOL = 0.025, 
+         LDH_ACTIVITY = ((LDH_ABSORBANCE/(PATH_LENGTH*EXTINCTION_COEFFICIENT*TISSUE_CONCENTRATION))*(ASSAY_VOL/SAMPLE_VOL))*-1) %>% 
+  mutate(species = factor(species), 
+         replicate = factor(replicate), 
+         temperature = as.numeric(temperature), 
+         fish_id = factor(fish_id)) %>% 
+  separate(LATIN_NAME, c("LATIN_GENUS","LATIN_SPECIES"), sep = " ", remove = FALSE) %>% 
+  mutate(LATIN_GENUS = factor(LATIN_GENUS), 
+         LATIN_SPECIES = factor(LATIN_SPECIES)) %>% 
+  mutate(LATITUDE = factor(case_when(species =="Adoed"~ "sub-tropical", 
+                             species == "Arub" ~ "tropical", 
+                             species == "Paus" ~ "sub-tropical",
+                             species == "Pmol" ~ "tropical",
+                             TRUE ~ "na"))) |> 
+  left_join(select(fish_mass, c("fish_id","standard_length","mass")), by="fish_id") |> 
+  dplyr::rename(MASS = mass)
+```
+
+All done! Ready for data analysis 
+
+## Initial plot {.tabset}
+
+### LDH v TEMPERATURE [SPECIES]
+
+```{r ldh-initial-plots, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, color = species)) + 
+  geom_point() + geom_smooth(method = "lm", se=FALSE) + theme_classic() 
+```
+
+### LDH [distribution]
+```{r ldh-initial-plots-2, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x = LDH_ACTIVITY, fill = temperature, color = temperature)) + 
+  geom_density(alpha =0.5, position = "identity") 
+
+ggplot(ldh.data, aes(x=LDH_ACTIVITY)) + geom_histogram()
+```
+
+### LDH v TEMPERATURE [LATITUDE]
+```{r ldh-initial-plots-3, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = LATITUDE, fill=LATITUDE)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + facet_grid(~LATIN_GENUS) + theme_classic()
+```
+
+### LDH v TEMPERATURE [GENUS]
+```{r ldh-initial-plots-4, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = LATIN_GENUS, fill=LATIN_GENUS)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + facet_grid(~LATITUDE) + theme_classic()
+```
+
+### LDH v TEMPERATURE [SPECIES]
+```{r ldh-initial-plots-5, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =temperature, y= LDH_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 3, raw=TRUE), alpha=0.3) + theme_classic()
+```
+
+### LDH v MASS 
+```{r ldh-initial-plots-6, warning=FALSE, message=FALSE}
+ggplot(ldh.data, aes(x =MASS, y= LDH_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE, alpha=0.3) + theme_classic() + 
+  facet_wrap(~temperature)
+```
+
+### {-}
+
+## Fit the model 
+
+The model was fit using the **glm** and later **glmmTMB** packages in R. A number of different models were tested to determine which hypothesis and associated variables best predicted enzyme activity. Model fit was examined using AICc, BIC, and r-squared values. Additional model were examined via the validation diagnostics provided by the **performance** and **dHARMA** packages in R. 
+
+From out initial plots we can see that our data is skewed to the right. From our initial plots we can all see that the relationship between enzyme activity and temperature is not linear, but rather may represent either a quadratic or cubic relationship. Let's start out model selection process by comparing different polynomial models.  
+
+### polynomial models
+```{r model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+ldh.model.1 <- glm(LDH_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+
+ldh.model.1.p2 <- glm(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data)  
+
+ldh.model.1.p3 <- glm(LDH_ACTIVITY ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3, k=3) 
+bic=BIC(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(ldh.model.1)[1], r.squaredLR(ldh.model.1.p2)[1], r.squaredLR(ldh.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.model.1, ldh.model.1.p2, ldh.model.1.p3, test = "Chisq")
+```
+
+Looks like the model where temperature is treated as a second order polynomial (quadratic) is better than the linear and third order polynomial model. Lets see if adding the variables **tissue.mass** and/or **mass** improves the model. 
+
+- *tissue.mass* refers to the mass of the tissue sample that was used. But note that samples were typically between 30 - 40 mg, so some control over this metric was done prior to the analysis. 
+- *mass* refers to the mass of the fish the sample was taken from. 
+
+### fixed factor comparisons
+```{r model-fit-2, warning=FALSE}
+#--- model 1 ---# 
+ldh.model.1.p2 <- glm(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data)  
+
+ldh.model.1.p2b <- ldh.model.1.p2 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(tissue_mass))  
+
+ldh.model.1.p2c <- ldh.model.1.p2 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(MASS))
+
+ldh.model.1.p2d <- ldh.model.1.p2 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(MASS)*scale(tissue_mass))
+```
+
+#### model comparisons - fixed factor comparisons 
+```{r model-comparisons-2, warning=FALSE}
+aic.c=AICc(ldh.model.1.p2, ldh.model.1.p2b, ldh.model.1.p2c, ldh.model.1.p2d, k=5) 
+bic=BIC(ldh.model.1.p2, ldh.model.1.p2b, ldh.model.1.p2c, ldh.model.1.p2d)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(ldh.model.1.p2)[1], r.squaredLR(ldh.model.1.p2b)[1],r.squaredLR(ldh.model.1.p2c)[1],r.squaredLR(ldh.model.1.p2d)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.model.1.p2, ldh.model.1.p2b, ldh.model.1.p2c, ldh.model.1.p2d, test = "Chisq")
+```
+
+The variables **tissue.mass and mass do not** significantly improve the model, therefore they will be left out of the model moving forward. 
+
+Lastly, because tissue samples from the same fish were tested at multiple temperatures we need to include **fish_id** as a random factor. 
+
+### Generalised linear mixed model (GLMM)
+```{r glmm-1}
+ldh.glmm.1.p2 <- glmmTMB(LDH_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML = TRUE,
+               data = ldh.data) 
+```
+
+Great! Now lets check our model validations to see how the model is performing. 
+
+## Model validation {.tabset}
+
+### ldh.glmm.1.p2 [performance]
+
+```{r model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.glmm.1.p2 %>% check_model(detrend=FALSE)
+```
+
+### ldh.glmm.1.p2 [DHARMa]
+
+```{r model-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.glmm.1.p2 %>% simulateResiduals(plot=TRUE)
+ldh.glmm.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### {-}
+
+There are a number of issues with this model. Lets see if we can solve some of the issues by exploring link functions that we have available.  
+
+## Re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r ldh-re-fit-model-1}
+ldh.glmm.1.p2 <- ldh.glmm.1.p2 %>% update(REML=FALSE)
+ldh.glmm.1.p2.log <- ldh.glmm.1.p2 %>% update(family=gaussian(link="log"), 
+                                              REML=FALSE) 
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2 %>% update(family=gaussian(link="sqrt"), 
+                                               REML=FALSE) 
+```
+
+### re-fit model comparisons [link function]
+
+```{r ldh-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.model.1.p2, ldh.glmm.1.p2.log,ldh.glmm.1.p2.sqrt,  k=3) 
+bic=BIC(ldh.model.1.p2, ldh.glmm.1.p2.log, ldh.glmm.1.p2.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(ldh.model.1.p2)[1], r.squaredGLMM(ldh.glmm.1.p2.log)[1], r.squaredGLMM(ldh.glmm.1.p2.sqrt)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+From this model comparison it looks like the model that uses the **square root** link function does the best job modelling the data. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
+
+```{r ldh-re-fit-model-2}
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = TRUE)
+``` 
+
+## Model re-validation {.tabset}
+
+### ldh.glmm.1.p2 [performance]
+
+```{r ldh-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.glmm.1.p2.sqrt %>% check_model(detrend=FALSE)
+```
+
+### ldh.glmm.1.p2 [DHARMa]
+
+```{r ldh-model-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.glmm.1.p2.sqrt %>% simulateResiduals(plot=TRUE)
+ldh.glmm.1.p2.sqrt %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### {-}
+
+## Important note
+
+**NOTE:** The sqrt gaussian model actually performs pretty well. However, when we look at the model there are clear signs of heteroscadiscity within the data (i.e., increasing variation at higher dependent variable values). This seems to be feature of the enzyme data whereby at low temperatures there is very little activity, and therefore little variation within activity at 10, 20, and 30C. However as temperatures increase to 40 and 50C we start to see enzyme activities increase exponentially and begin to identify maximal enzyme activity. Here we would _expect_ to see more variation as we are beginning to see the difference different individuals have in maximum LDH activity. One could argue in continuing to use this model despite heteroscadiscity being seen within the data. However, there are a couple of options if one chooses to fix the issue. The first could be to try a different distribution, another could be to transform that data. Both options are explored below. 
+
+## Model re-re-fit 
+
+### Gamma models
+```{r ldh-re-re-model-fit}
+ldh.glmm.1.p2.sqrt <- ldh.glmm.1.p2.sqrt %>% update(REML = FALSE)
+ldh.glmm.1.p2.gamma.log <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="log"), 
+                                                     REML = FALSE)  
+ldh.glmm.1.p2.gamma.sqrt <- ldh.glmm.1.p2.sqrt %>% update(family = Gamma(link="sqrt"), 
+                                                     REML = FALSE)  
+```
+
+### model comparisons - Gamma models 
+```{r ldh-re-re-fit-model-comparisons, warning=FALSE}
+aic.c=AICc(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma.log,ldh.glmm.1.p2.gamma.sqrt,  k=2) 
+bic=BIC(ldh.glmm.1.p2.sqrt, ldh.glmm.1.p2.gamma.log, ldh.glmm.1.p2.gamma.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(ldh.glmm.1.p2.sqrt)[1], r.squaredGLMM(ldh.glmm.1.p2.gamma.log)[1], "NA"))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+## Model re-re-validation {.tabset}
+
+### ldh.glmm.1.p2.gamma [performance]
+
+```{r ldh-model-re-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+# ldh.glmm.1.p2.gamma.sqrt %>% check_model(detrend=FALSE)
+```
+
+### ldh.glmm.1.p2 [DHARMa]
+
+```{r ldh-model-re-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.glmm.1.p2.gamma.sqrt %>% simulateResiduals(plot=TRUE)
+ldh.glmm.1.p2.gamma.sqrt %>% DHARMa::testResiduals(plot=TRUE)
+
+```
+
+### {-}
+
+## Important note 2
+The Gamma distribution does seem to improve the model, definitely helps solve the heteroscadisity problem, however, there are down sides. The dispersion assumption within the DHARMa diagnositics is violated. Let's move on and see how the data transformation models perform. 
+
+Next we will try transforming the data.
+
+## Fit model [Transformed data]
+
+### polynomial models [Transformed data]
+```{r transformed-model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+ldh.sqrt.model.1 <- glm(sqrt(LDH_ACTIVITY) ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+
+ldh.sqrt.model.1.p2 <- glm(sqrt(LDH_ACTIVITY) ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data)  
+
+ldh.sqrt.model.1.p3 <- glm(sqrt(LDH_ACTIVITY) ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = ldh.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r transformed-model-comparisons-1, warning=FALSE}
+aic.c=AICc(ldh.sqrt.model.1, ldh.sqrt.model.1.p2, ldh.sqrt.model.1.p3, k=3) 
+bic=BIC(ldh.sqrt.model.1, ldh.sqrt.model.1.p2, ldh.sqrt.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(ldh.sqrt.model.1)[1], r.squaredLR(ldh.sqrt.model.1.p2)[1], r.squaredLR(ldh.sqrt.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(ldh.sqrt.model.1, ldh.sqrt.model.1.p2, ldh.sqrt.model.1.p3, test = "Chisq")
+```
+
+Once again the model that fits temperature as a second order polynomial seems to be the best fit. lets continue. 
+
+```{r}
+
+ldh.sqrt.model.1.p2 <- glmmTMB(sqrt(LDH_ACTIVITY) ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML=TRUE,
+               data = ldh.data)  
+```
+
+## Model validation [Transformed data] {.tabset}
+
+### ldh.sqrt.model.1.p2 [performance]
+
+```{r ldh-model-trans-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+ldh.sqrt.model.1.p2 %>% check_model(detrend=FALSE)
+```
+
+### ldh.sqrt.model.1.p2 [DHARMa]
+
+```{r ldh-model-trans-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+ldh.sqrt.model.1.p2 %>% simulateResiduals(plot=TRUE)
+ldh.sqrt.model.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
+
+```
+
+### {-}
+
+## Important note 3 
+
+It looks like transforming the data via a square root transformation really helps model performance. No significant data violations occur and the diagnostic plots start to look a lot better. This is definitely a viable and justifiable option. 
+
+## Partial plots {.tabset} 
+
+### ggemmeans {.tabset} 
+
+#### TEMPERATURE V LATITUDE
+
+```{r ldh-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATITUDE) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS
+
+```{r ldh-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS V LATITUDE
+
+```{r ldh-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% ggemmeans(~temperature|LATITUDE|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+### plot_model 
+
+```{r ldhpartial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
+ldh.sqrt.model.1.p2 %>% plot_model(type='std', vline.color = "grey12", show.values=TRUE, sort.est = TRUE, value.offset = 0.3) 
+```
+
+#### {-}
+
+### {-}
+
+## Model investigation {.tabset .tabset-pills}
+
+See *ANOVA* tab for values reported in manuscript.
+
+### summary 
+```{r ldh-model-inv-1, echo=FALSE}
+as.data.frame(summary(ldh.sqrt.model.1.p2)$coefficients[1]) %>% 
+  dplyr::rename( 
+    Estimate = cond.Estimate,
+    StdError = cond.Std..Error,
+    Zvalue = cond.z.value,
+    Pvalue = cond.Pr...z..
+    ) %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### anova 
+```{r model-inv-2, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% Anova() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### confint 
+```{r model-inv-3, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% confint() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### r-squared
+```{r model-inv-4, echo=FALSE}
+ldh.sqrt.model.1.p2 %>% performance::r2_nakagawa() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### {-} 
+
+## Pairwise comparisons {.tabset .tabset-faded} 
+
+### emtrends 
+
+```{r rest-pairwise-1}
+ldh.sqrt.model.1.p2 %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+SCROLL TO THE RIGHT -->
+
+The numbers in the left most column in the table just mention that the slopes are assuming mean **MASS_CENTERED** and **RESTING_TIME_SEONDS** values when looking at differences between latitudinal slopes.
+
+### emmeans [response]
+```{r rest-pairwise-2}
+ldh.sqrt.model.1.p2 %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+### emmeans [ratios]
+```{r rest-pairwise2.2}
+ldh.sqrt.model.1.p2 %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid(transform = "log")  %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=FALSE)
+
+```
+
+
+
+```{r rest-pairwise-3, eval = FALSE, echo=FALSE}
+### temperature 
+ldh.sqrt.model.1.p2 %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid(transform = "log")  %>% summary(infer=TRUE)
+```
+
+
+```{r rest-pairwise-3.5, eval = FALSE, echo=FALSE}
+### temperture [combined]
+ldh.means.temp <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS  + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response"); ldh.means.temp$emmeans
+
+ldh.means.temp.df <- ldh.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+ldh.means.temp.df[1,8] = 0.0000 
+
+ldh.means.temp.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+
+
+### Means - f(temperature)
+```{r rest-pairwise-4}
+ldh.means <- ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response")
+
+
+ldh.means.df <- ldh.means$emmeans %>% as.data.frame() %>% 
+  mutate("change"=response - lag(response, n=1, default = first(response)), 
+         "%change" = response/lag(response, n=1, default = first(response))*100) %>% 
+  mutate("%change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `%change`), 
+         "change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `change`)) #%>% 
+  #rename("\u394 %change" = "%change", 
+         #"\u394 change" = "change")
+
+ldh.means.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+
+```{r rest-pairwise-5.2, eval =FALSE, echo=FALSE}
+### Means - f(temperature) [ratios]
+ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS  + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response")  %>% regrid(transform = "log") %>% pairs(by =c("temperature")) %>% summary(infer=FALSE)
+```
+
+
+
+
+```{r rest-pairwise-5, eval = FALSE, echo=FALSE}
+### Abs. diff - f(temperature)
+ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
+```
+
+
+```{r ldh-pairwise-6, eval = FALSE, echo=FALSE}
+### Genus comparisons
+ldh.sqrt.model.1.p2 %>% update(sqrt(LDH_ACTIVITY) ~ factor(temperature) * LATITUDE * LATIN_GENUS  + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS")) %>% summary(infer=TRUE, type = "response")
+```
+
+
+```{r ldh-pairwise-genus, eval= FALSE, echo=FALSE}
+### Genus [combined]
+ldh.means.genus <- ldh.sqrt.model.1.p2 %>% update(LDH_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS  + (1|fish_id)) %>% emmeans(pairwise ~ LATIN_GENUS, type = "response") %>% summary(infer=TRUE); ldh.means.genus
+
+```
+
+
+```{r rmr-effect-size, eval= FALSE, echo=FALSE}
+### effect size-[emmeans]
+ldh.emm <- ldh.sqrt.model.1.p2 %>% emmeans(~temperature*LATITUDE*LATIN_GENUS) %>% regrid()
+eff_size(ldh.emm, sigma = sigma(ldh.sqrt.model.1.p2), edf=df.residual(ldh.sqrt.model.1.p2))
+```
+
+
+```{r ldh-effect-size, eval = FALSE, echo=FALSE}
+### effect size-[emtrends]
+ldh.emm <- ldh.sqrt.model.1.p2 %>% emtrends(var = "temperature")
+eff_size(ldh.emm, sigma = sigma(ldh.sqrt.model.1.p2), edf=df.residual(ldh.sqrt.model.1.p2))
+```
+
+### {-}
+
+## Summary figure 
+
+
+```{r ldh-sum-fig, fig.width=8, fig.height=6, echo=TRUE, hide=TRUE}
+ldh.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+ldh.emm.df <- ldh.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+ldh.obs <-  ldh.data %>% 
+  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA, type="response"),
+         Resid = residuals(ldh.sqrt.model.1.p2, type="response"),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_jitter(data=ldh.obs, 
+              aes(y=Fit^2, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,350), breaks = seq(0, 350, by = 50)) +
+  theme_classic() + 
+  ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldh.plot
+```
+
+## Arrhenius plot 
+```{r ldh-arrhenius plot}
+
+ldh.arrhenius.plot <- ggplot(ldh.emm.df, aes(y=log(response), x=1/(temperature+273.15), linetype=species, color = species, fill=species))+
+  geom_jitter(data=ldh.obs, 
+              aes(y=log(Fit^2), color = species), 
+              #width=0.005, 
+              alpha = 0.3, 
+              size = 2) +
+  stat_poly_line(method="lm", se = TRUE) + 
+  stat_poly_eq(use_label(c("eq", "R2")), hjust = -1.6)+
+  #geom_ribbon(aes(x=1/(temperature+273.15), 
+              #ymin= log(asymp.LCL), ymax= log(asymp.UCL)),
+              #alpha = 0.2, 
+              #color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("log(LDH (U mg "^{-1} * "tissue))")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) + 
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldh.arrhenius.plot
+```
+
+# Citrate synthase (CS)
+
+## Load data 
+```{r cs-import-data-hide, include=FALSE}
+cs.import.data = read_delim("./import_files/Lauren_CS.txt", 
+    delim = "\t", escape_double = FALSE, 
+    col_types = cols(`Sample index` = col_factor(levels = c("1", 
+        "2", "3", "4", "5", "6")), `Sample ID 1` = col_factor(levels = c("1", 
+        "2", "3", "4", "5", "6")), `Creation time` = col_datetime(format = "%d/%m/%Y %H:%M:%S %p"), 
+        ...17 = col_skip()), trim_ws = TRUE)
+```
+
+```{r cs-load-data}
+cs <- cs.import.data
+``` 
+
+## Data manipulation
+```{r cs-data-manipulation-1, warning=FALSE, message=FALSE}
+#--- data preparation/manipulation ---# 
+cs2 <- cs |>
+  clean_names() |>
+  separate(sample, into=c('tissue_type','species','replicate','temperature'), sep = "_", remove = FALSE) |>  
+  separate(creation_time, into=c('DATE','TIME'), sep = " ", remove = FALSE) |>
+  arrange(sample_id_1, DATE, TIME) 
+
+cs3 <- cs2 |> 
+  mutate(TIME = hms(cs2$TIME)) |>
+  mutate(TIME = chron(times=cs2$TIME)) |>
+  arrange(TIME) |>
+  dplyr::group_by(sample, sample_id_1) |> 
+  dplyr::mutate(TIME_DIFF = TIME - first(TIME)) |> 
+  dplyr::filter(TIME != first(TIME)) |>
+  dplyr::ungroup() |> 
+  mutate(TIME_DIFF_SECS = period_to_seconds(hms(TIME_DIFF))) |> 
+  mutate(MINUTES = TIME_DIFF_SECS/60) |> 
+  mutate(MINUTES = round(MINUTES, digits = 2)) |> 
+  dplyr::rename(CUVETTE = sample_id_1) |> 
+  mutate(LATIN_NAME = case_when( species =="Adoed"~ "Apogon doederlein", 
+                             species == "Arub" ~ "Apogon rubrimacula", 
+                             species == "Paus" ~ "Pomacentrus australis",
+                             species == "Pmol" ~ "Pomacentrus moluccensis",
+                             TRUE ~ "na")) |> 
+  unite("UNIQUE_SAMPLE_ID", c(species, replicate, temperature, sample_index), sep="_", remove = FALSE)
+```
+
+### Data cleaning 
+
+Data points have been checked using previously written app script that allows the user to look at the plotted points of samples that were run. Because we are interested in the slope, points that plateaued were removed from the analysis, as it signifies that the reaction ran out of 'fuel' to use.
+
+Note that later on the first data point will be removed from all samples. For example, if a run requires that the first 4 data points be removed, 3 will be removed below and then one will be removed at a later step. 
+
+
+* **grp2**: removed first 2 data points which was causing a plateau
+* **grp3**: removed first 3 data points which was causing a plateau
+* **grp4**: removed first 4 data points which was causing a plateau
+* **grp5**: removed first 5 data points which was causing a plateau
+
+```{r cs-data-manipulation-2, warning=FALSE, message=FALSE} 
+grp1 <- c("Arub_04_30_3","Paus_02_30_2","Pmol_01_20_3","Pmol_03_30_1","Pmol_03_30_3", 
+          "Paus_08_10_2", "Paus_10_40_1", "Pmol_07_20_2","Pmol_09_10_1","Arub_06_30_3",
+          "Pmol_10_20_1") 
+grp2 <- c("Arub_04_30_3","Paus_02_30_1","Pmol_06_30_1","Pmol_10_10_1","Pmol_10_10_2", 
+          "Pmol_03_20_2","Pmol_05_30_3","Adoed_09_20_3","Pmol_09_30_3")
+grp3 <- c("Adoed_03_20_3","Pmol_03_30_2","Pmol_03_10_3","Pmol_03_10_1","Pmol_03_30_2") 
+grp4 <- c("Arub_04_30_2","Arub_06_30_1","Adoed_05_20_2","Pmol_02_30_3","Pmol_03_10_1","Pmol_03_10_1", 
+          "Arub_06_30_1", "Adoed_05_20_2","Arub_02_20_1") 
+grp5 <- c("Pmol_01_20_2","Arub_02_20_3")  
+grp6 <- c("Arub_06_30_2","Pmol_02_30_1","Pmol_09_20_1","Arub_06_30_2") 
+grp7 <- c("Arub_04_30_1","Pmol_03_10_2","Pmol_03_10_2","Pmol04_20_1") 
+grp8 <- c("Pmol_02_30_2","Pmol_09_20_3","Pmol_06_20_2") 
+grp9 <- c("Adoed_03_20_2","Pmol_03_40_3","Pmol_04_20_3") 
+grp10 <- c() 
+grp11 <- c("Pmol_04_20_1","Pmol_09_20_2","Pmol_04_20_5","Arub_02_20_2") 
+data.grp1 <- c("Pmol_01_10_2") 
+data.grp2 <- c("Pmol_05_20_3")
+data.grp3 <- c("Pmol_07_20_3","Pmol_10_10_1")
+data.grp4 <- c("Pmol_07_10_1") 
+data.grp7 <- c("Pmol_05_30_3")
+data.grp8 <- c("Adoed_05_50_5")
+```
+
+
+```{r cs-data-cleaning}
+cs3.filtered <- cs3 |> 
+  filter(!(UNIQUE_SAMPLE_ID %in% c(
+                                   #--- Apogon rubrimacula ---#
+                                   
+                                   "Arub_04_10_1", "Arub_04_10_2", "Arub_04_10_3", 
+                                   "Arub_04_20_1", "Arub_04_20_2", "Arub_04_20_3", # slopes are all negative
+                                   "Arub_06_20_1", "Arub_06_20_2", "Arub_06_20_3", # slopes all negative
+                                   "Arub_10_30_3", 
+                                   "Arub_01_50_1", "Arub_01_50_2", "Arub_01_50_3", # slopes look fine but are much shallower 
+                                                                                   # than all other samples
+                                   
+                                   #--- Apogon doederlein ---# 
+                                   "Adoed_09_10_1", 
+                                   "Adoed_08_10_1", 
+                                   "Adoed_08_20_3", 
+                                   "Adoed_08_30_1", 
+                                   "Adoed_06_10_1",
+                                   
+                                   #--- Pomacentrus australia ---#
+                                   "Paus_02_10_2",  
+                                   "Paus_02_20_1", "Paus_02_20_2", "Paus_02_20_3", 
+                                   
+                                   #--- Pomacentrus moluccensis  
+                                   "Pmol_02_20_1", "Pmol_02_20_2", "Pmol_02_20_3", 
+                                   "Pmol_03_20_1", "Pmol_03_20_3", 
+                                   "Pmol_03_10_2",
+                                   "Pmol_04_20_2", 
+                                   "Pmol_05_20_1", "Pmol_05_20_2",
+                                   "Pmol_06_50_3",
+                                   "Pmol_06_20_2", 
+                                   "Pmol_04_10_2"
+                                   ))) |>
+  dplyr::group_by(UNIQUE_SAMPLE_ID) |> 
+  dplyr::arrange(UNIQUE_SAMPLE_ID, TIME) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp1 & row_number() <= 1)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp2 & row_number() <= 2)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp3 & row_number() <= 3)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp4 & row_number() <= 4)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp5 & row_number() <= 5)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp6 & row_number() <= 6)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp7 & row_number() <= 7)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp8 & row_number() <= 8)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp9 & row_number() <= 9)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp10 & row_number() <= 10)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% grp11 & row_number() <= 11)) |> 
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp1 & row_number() == 4)) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp2 & between(row_number(), 7, 10))) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp3 & row_number() == 4 )) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp4 & row_number() == 10 )) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp7 & between(row_number(), 9, 13))) |>
+  dplyr::filter(!(UNIQUE_SAMPLE_ID %in% data.grp8 & between(row_number(), 15, 20))) |>
+  dplyr::ungroup() |> 
+  mutate(UNIQUE_SAMPLE_ID = str_sub(UNIQUE_SAMPLE_ID, end = -3))
+
+```
+
+Great! Now we have all the data points that we want to keep. However, the data needs to manipulated in a way that we can obtain and pull out slopes from the absorption readings, and then calculate enzyme activity based on these slopes. This will involve a number of steps.  
+
+### Data calculations 
+
+#### Step1: Extract slopes 
+
+Step1 will produce a data frame that provides you with the slope that was obtained for cuvettes 1-3 for each sample run at each experimental temperature. Note that at the end of this step we are removing slopes that were positive in value, as LDH slopes should produce a negative slope, due to NADH being used up. 
+```{r cs-data-calc-1, warning=FALSE, message=FALSE}
+CS_activity <- cs3.filtered %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE != ("6"))%>% 
+  filter(CUVETTE != ("4"))%>% 
+  filter(CUVETTE != ("5")) %>% 
+  filter(Slope >= 0)
+
+```
+
+#### Step2: Slope means
+
+Step2 will calculate the mean slope for cuvette 1-3. 
+```{r cs-data-calc-2}
+CS_activity_means <- CS_activity %>% 
+  dplyr::group_by(UNIQUE_SAMPLE_ID) %>% 
+  mutate(Mean = mean(Slope)) %>% 
+  dplyr::ungroup()
+```
+
+#### Step3: Background activity level
+
+Step3 will calculate background activity level by measuring the slope from cuvette 5 (postive control)
+```{r cs-data-calc-3, warning=FALSE, message=FALSE}
+CS_background <- cs3.filtered %>% 
+  group_by(UNIQUE_SAMPLE_ID, CUVETTE) %>% 
+  do({
+    mod = lm(result ~ MINUTES, data = .)
+    data.frame(Intercept = coef(mod)[1],
+               Slope = coef(mod)[2], 
+               r2 = summary(mod)$adj.r.squared)
+  }) %>%
+  ungroup() %>%
+  filter(CUVETTE == ("5")) %>% 
+  dplyr::rename(Background = Slope)  
+```
+
+#### Step4: Merging dataframes
+
+Step4 will merge the data frames that you created with the mean slopes and the background slopes.
+```{r cs-data-calc-4, warning=FALSE, message=FALSE}
+cs_final_table <- CS_activity %>% 
+  full_join(distinct(CS_activity_means[,c(1,6)]), by = "UNIQUE_SAMPLE_ID") %>%
+  full_join(CS_background[,c(1,4)], by = "UNIQUE_SAMPLE_ID") 
+cs_final_table$Mean[duplicated(cs_final_table$Mean)] <- ""
+cs_final_table$Background[duplicated(cs_final_table$Background)] <- ""
+cs_final_table <- cs_final_table %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = Background/Mean) %>% 
+  drop_na(Mean) %>% 
+  mutate(Background_perc = case_when(UNIQUE_SAMPLE_ID == "Adoed_03_40" ~ 0.0000, # ignore blank - QC
+                                     UNIQUE_SAMPLE_ID == "Pmol_07_30" ~ 0.0000, 
+                                     UNIQUE_SAMPLE_ID == "Arub_03_50" ~ 0.0000, 
+                                     UNIQUE_SAMPLE_ID == "Paus_07_10" ~ 0.0000,
+                                     UNIQUE_SAMPLE_ID == "Paus_02_10" ~ 0.0000,
+                                     UNIQUE_SAMPLE_ID == "Adoed_06_10" ~ 0.0000,
+                                     UNIQUE_SAMPLE_ID == "Arub_02_10" ~ 0.0000,
+                                     TRUE ~ Background_perc))
+```
+
+#### Step5: Enzyme activity levels 
+
+Step5 is where enzyme activity levels are calculated. Within this step background activity level is taken into account and subtracted from slopes where background activity was >5% or more of the sample slope. 
+```{r cs-data-calc-5, warning=FALSE, message=FALSE}
+CS.data <- cs_final_table %>% 
+  select(c(UNIQUE_SAMPLE_ID, Mean, Background, Background_perc)) %>% 
+  mutate(Mean = as.numeric(Mean), 
+         Background = as.numeric(Background), 
+         Background_perc = as.numeric(Background_perc)) %>% 
+  mutate(Background2 = case_when(Background_perc <= 0.05 ~ 0, 
+                                 TRUE ~ Background), 
+         CS_ABSORBANCE = Mean - Background2) %>%
+  inner_join(select(cs3.filtered, c(UNIQUE_SAMPLE_ID, species, replicate, temperature, LATIN_NAME)), by ="UNIQUE_SAMPLE_ID") %>% 
+  unite("fish_id", c(species,replicate), sep = "_", remove = FALSE) %>%
+  inner_join(tissue.mass, by = "fish_id") %>% 
+  mutate(TISSUE_MASS_CENTERED = scale(tissue_mass, center = TRUE, scale = FALSE)) %>%
+  distinct(UNIQUE_SAMPLE_ID, .keep_all = TRUE) %>% 
+  mutate(PATH_LENGTH = 1, 
+         EXTINCTION_COEFFICIENT = 13.6, 
+         TISSUE_CONCENTRATION = 0.01, 
+         ASSAY_VOL = 0.930, 
+         SAMPLE_VOL = 0.020, 
+         CS_ACTIVITY = ((CS_ABSORBANCE/(PATH_LENGTH*EXTINCTION_COEFFICIENT*TISSUE_CONCENTRATION))*(ASSAY_VOL/SAMPLE_VOL)))   %>% 
+  separate(LATIN_NAME, c("LATIN_GENUS","LATIN_SPECIES"), sep = " ", remove = FALSE) %>% 
+  mutate(LATIN_GENUS = factor(LATIN_GENUS), 
+         LATIN_SPECIES = factor(LATIN_SPECIES)) %>% 
+  mutate(LATITUDE = factor(case_when(species =="Adoed"~ "sub-tropical", 
+                             species == "Arub" ~ "tropical", 
+                             species == "Paus" ~ "sub-tropical",
+                             species == "Pmol" ~ "tropical",
+                             TRUE ~ "na")), 
+         temperature = as.numeric(temperature)) %>% 
+  drop_na() %>% filter(CS_ACTIVITY >=0) |> 
+  left_join(select(fish_mass, c("fish_id","standard_length","mass")), by="fish_id") |> 
+  dplyr::rename(MASS = mass)
+```
+
+
+```{r cs-save-file-1, echo=FALSE, hide=TRUE, eval = FALSE}
+write.table(cs3.filtered, file = "./excel_files/Lauren_CS_filtered.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(cs3.filtered, file = "./import_files/Lauren_CS_filtered.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+write.table(cs3, file = "./excel_files/Lauren_CS_processed.csv", col.names = TRUE, row.names = FALSE, sep=",")
+write.table(cs3, file = "./import_files/Lauren_CS_processed.txt", col.names = TRUE, row.names = FALSE, sep="\t")
+```
+
+## Initial plot {.tabset}
+
+### CS v TEMPERATURE [SPECIES]
+
+```{r cs-initial-plots, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, color = species)) + 
+  geom_point() + 
+  stat_smooth(method = "lm", se=FALSE) + 
+  theme_classic() 
+```
+
+### CS [distribution]
+```{r cs-initial-plots-2, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x = CS_ACTIVITY, fill = temperature, color = temperature)) + 
+  geom_density(alpha =0.5, position = "identity") 
+
+ggplot(CS.data, aes(x=CS_ACTIVITY)) + geom_histogram()
+```
+
+### CS v TEMPERATURE [LATITUDE]
+```{r cs-initial-plots-3, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = LATITUDE, fill=LATITUDE)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATIN_GENUS) + theme_classic()
+```
+
+### CS v TEMPERATURE [GENUS]
+```{r cs-initial-plots-4, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = LATIN_GENUS, fill=LATIN_GENUS)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATITUDE) + theme_classic()
+```
+
+### CS v TEMPERATURE [SPECIES]
+```{r cs-initial-plots-5, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =temperature, y= CS_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + theme_classic()
+```
+
+### CS v MASS [SPECIES]
+```{r cs-initial-plots-6, warning=FALSE, message=FALSE}
+ggplot(CS.data, aes(x =MASS, y= CS_ACTIVITY, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE, alpha=0.3) + theme_classic() + facet_wrap(~temperature)
+```
+
+### {-} 
+
+## Fit the model 
+
+The model was fit using the **glm** and later **glmmTMB** packages in R. A number of different models were tested to determine which hypothesis and associated variables best predicted resting oxygen consumption. Model fit was examined using AICc, BIC, and r-squared values. Additional model were examined via the validation diagnostics provided by the **performance** and **dHARMA** packages in R.
+
+From our initial plots we can all see that the relationship between enzyme activity and temperature is no linear, but rather may represent either a quadratic or cubic relationship. Let's start the model selection process by comparing different polynomial models.  
+
+### polynomial models
+```{r cs-model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+cs.model.1 <- glm(CS_ACTIVITY ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data) 
+
+cs.model.1.p2 <- glm(CS_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data)  
+
+cs.model.1.p3 <- glm(CS_ACTIVITY ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r cs-model-comparisons-1, warning=FALSE}
+aic.c=AICc(cs.model.1, cs.model.1.p2, cs.model.1.p3, k=3) 
+bic=BIC(cs.model.1, cs.model.1.p2, cs.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(cs.model.1)[1], r.squaredLR(cs.model.1.p2)[1], r.squaredLR(cs.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(cs.model.1, cs.model.1.p2, cs.model.1.p3, test = "Chisq")
+```
+
+Looks like the model where temperature is treated as a second order polynomial (quadratic model) is better than the and third order polynomial model. Lets see if adding the variable **tissue.mass** and/or **mass** improves the model. 
+
+### fixed factor comparisons
+```{r cs-model-fit-2, warning=FALSE}
+#--- model 1 ---# 
+cs.model.1.p2 <- glm(CS_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = CS.data)  
+
+cs.model.1.p2b <- cs.model.1 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(tissue_mass))
+
+cs.model.1.p2c <- cs.model.1 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(MASS))
+
+cs.model.1.p2d <- cs.model.1 %>% update(. ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + scale(MASS)*scale(tissue_mass))
+```
+
+#### model comparisons - fixed factor comparisons 
+```{r cs-model-comparisons-2, warning=FALSE}
+aic.c=AICc(cs.model.1.p2, cs.model.1.p2b,cs.model.1.p2c, cs.model.1.p2d, k=5) 
+bic=BIC(cs.model.1.p2, cs.model.1.p2b,cs.model.1.p2c, cs.model.1.p2d)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(cs.model.1.p2)[1], r.squaredLR(cs.model.1.p2b)[1],r.squaredLR(cs.model.1.p2c)[1], r.squaredLR(cs.model.1.p2d)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(cs.model.1.p2, cs.model.1.p2b,cs.model.1.p2, cs.model.1.p2b,cs.model.1.p2c, cs.model.1.p2d, test = "Chisq")
+```
+
+The variable **tissue.mass and mass do not** improve the model, therefore they will be left out of the model moving forward. 
+
+Lastly, because tissue samples from the same fish were tested at multiple temperatures we need to include **fish_id** as a random factor. 
+
+### Generalised linear mixed model (GLMM)
+```{r cs-glmm-1}
+cs.model.1.p2 <- glmmTMB(CS_ACTIVITY ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML = TRUE,
+               data = CS.data) 
+```
+
+Great! Now lets check our model validations to see how the model is performing. 
+
+## Model validation {.tabset}
+
+### cs.model.1 [performance]
+
+```{r cs-model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+cs.model.1.p2 %>% check_model(detrend = FALSE)
+```
+
+### cs.model.1 [DHARMa]
+
+```{r cs-model-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown', comment=NA}
+cs.model.1.p2 %>% simulateResiduals(plot=TRUE)
+cs.model.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+
+### {-}
+
+Issues that come up with the model are the KS test provided by the DHARMa checks and we also see some of the lower values drop off on the qq-plot provided by the 'check_model' function. Let's see if we can fix some of this issues by changing the link function within our distributions. 
+
+## Re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r cs-re-fit-model-1}
+cs.model.1.p2 <-  cs.model.1.p2 %>% update(REML = FALSE)
+cs.model.1.p2.log <- cs.model.1.p2 %>% update(family=gaussian(link="log"), 
+                                              REML=FALSE) 
+cs.model.1.p2.sqrt <- cs.model.1.p2 %>% update(family=gaussian(link="sqrt"), 
+                                               REML=FALSE) 
+```
+
+### re-fit model comparisons [link function]
+
+```{r cs-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(cs.model.1.p2, cs.model.1.p2.log, cs.model.1.p2.sqrt,  k=3) 
+bic=BIC(cs.model.1.p2, cs.model.1.p2.log, cs.model.1.p2.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(cs.model.1.p2)[1], r.squaredGLMM(cs.model.1.p2.log)[1], r.squaredGLMM(cs.model.1.p2.sqrt)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(cs.model.1.p2, cs.model.1.p2.log, cs.model.1.p2.sqrt, test = "Chisq")
+```
+
+From this model comparison it looks like the model that uses the **log** link function helps improve our model. Lets see how the model validation looks. We will run the model one more time with **REML=TRUE** before looking at model validation outputs. 
+
+```{r cs-re-fit-model-2}
+cs.model.1.p2.log <- cs.model.1.p2.log %>% update(REML = TRUE)
+``` 
+
+## Model re-validation {.tabset}
+
+### cs.model.1.p2.log [performance]
+
+```{r cs-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+cs.model.1.p2.log %>% check_model(detrend=FALSE)
+```
+
+### cs.model.1.p2.log [DHARMa]
+
+```{r cs-model-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+cs.model.1.p2.log %>% simulateResiduals(plot=TRUE)
+cs.model.1.p2.log %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+
+### {-}
+
+Model looks much better, there are still some issues with qq plot output from the **plot_model** validations, but otherwise the model looks like it is performing really well. Considering how well the model is performing across most metrics, the current model is judged to be suitable.  
+
+## Partial plots {.tabset} 
+
+### ggemmeans {.tabset} 
+
+#### TEMPERATURE V LATITUDE
+
+```{r cs-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+cs.model.1.p2.log %>% ggemmeans(~temperature|LATITUDE) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS
+
+```{r cs-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+cs.model.1.p2.log %>% ggemmeans(~temperature|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS V LATITUDE
+
+```{r cs-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+cs.model.1.p2.log %>% ggemmeans(~temperature|LATITUDE|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+### plot_model 
+
+```{r cs-partial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
+cs.model.1.p2.log %>% plot_model(vline.color = "grey12", show.values=TRUE, sort.est = TRUE, value.offset = 0.3) 
+```
+
+#### {-}
+
+### {-}
+
+## Model investigation {.tabset .tabset-pills}
+
+See *ANOVA* tab for values reported in manuscript.
+
+### summary 
+```{r cs-model-inv-1, echo=TRUE}
+as.data.frame(summary(cs.model.1.p2.log)$coefficients[1]) %>% 
+  dplyr::rename( 
+    Estimate = cond.Estimate,
+    StdError = cond.Std..Error,
+    Zvalue = cond.z.value,
+    Pvalue = cond.Pr...z..
+    ) %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### anova 
+```{r cs-model-inv-2, echo=TRUE}
+cs.model.1.p2.log %>% Anova() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### confint 
+```{r cs-model-inv-3, echo=TRUE}
+cs.model.1.p2.log %>% confint() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### r-squared
+```{r cs-model-inv-4, echo=TRUE}
+cs.model.1.p2.log %>% performance::r2_nakagawa() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### {-} 
+
+## Pairwise comparisons {.tabset .tabset-faded} 
+
+### emtrends 
+
+```{r cs-pairwise-1, eval=TRUE}
+cs.model.1.p2.log %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+SCROLL TO THE RIGHT -->
+
+The numbers in the left most column in the table just mention that the slopes are assuming mean **MASS_CENTERED** and **RESTING_TIME_SEONDS** values when looking at differences between latitudinal slopes.
+
+### emmeans 
+```{r cs-pairwise-2, eval=TRUE}
+cs.model.1.p2.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid() %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+
+
+```{r cs-pairwise-3, eval = FALSE, echo=FALSE}
+### temperature 
+cs.model.1.p2.log %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
+```
+
+
+```{r cs-pairwise-3.5, eval = FALSE, echo=FALSE}
+### temperture [combined]
+cs.means.temp <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response") %>% summary(infer=TRUE)
+
+cs.means.temp.df <- cs.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+cs.means.temp.df[1,11] = 0.0000 
+
+
+cs.means.temp.df  
+```
+
+
+```{r cs-pairwise-genus, eval = FALSE, echo=FALSE}
+### Genus values [combined]
+cs.genus.df <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS, type = "response"); cs.genus.df$emmeans
+
+```
+
+
+```{r cs-pairwise-genus2, eval = FALSE, echo=FALSE}
+### Genus ratios [combined]
+cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS, type = "response") %>% pairs(by="temperature") %>% summary(infer=FALSE)
+
+```
+
+
+```{r cs-pairwise-genus3, eval = FALSE, echo=FALSE}
+### Genus differences [combined]
+cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS, type = "response") %>% regrid() %>% pairs(by="temperature") %>% summary(infer=FALSE)
+
+```
+
+### Means - f(temperature)
+```{r cs-pairwise-4, eval=TRUE}
+cs.means <- cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response")
+
+cs.means.df <- cs.means$emmeans %>% as.data.frame() %>% 
+  mutate("change"=response - lag(response, n=1, default = first(response)), 
+         "%change" = response/lag(response, n=1, default = first(response))*100) %>% 
+  mutate("%change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `%change`), 
+         "change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `change`)) #%>% 
+  #rename("\u394 %change" = "%change", 
+         #"\u394 change" = "change")
+
+cs.means.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+
+```{r cs-pairwise-5, eval = FALSE, echo=FALSE}
+### Abs. diff - f(temperature)
+cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=FALSE, type = "response")
+```
+
+
+```{r cs-pairwise-6, eval = FALSE, echo=FALSE}
+### Genus comparisons
+cs.model.1.p2.log %>% update(CS_ACTIVITY ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS")) %>% summary(infer=TRUE, type = "response")
+```
+
+
+```{r cs-effect-size, eval = FALSE, echo=FALSE}
+### effect size
+cs.emm <- cs.model.1.p2.log %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
+eff_size(cs.emm, sigma = sigma(cs.model.1.p2.log), edf=df.residual(cs.model.1.p2.log))
+```
+
+### {-}
+
+## Summary figure 
+
+
+```{r cs-sum-fig, fig.width=8, fig.height=6, echo=TRUE, hide=TRUE}
+cs.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+cs.emm.df <- cs.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+cs.obs <-  CS.data %>% 
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log,  type="response"),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_jitter(data=cs.obs, 
+              aes(y=Fit, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,16), breaks = seq(0, 16, by = 2)) +
+  theme_classic() + 
+  ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); cs.plot
+```
+
+## Arrhenius plot 
+```{r cs-arrhenius plot, hide=TRUE}
+
+cs.arrhenius.plot <- ggplot(cs.emm.df, aes(y=log(response), x=1/(temperature+273.15), linetype=species, color = species, fill=species))+
+  geom_jitter(data=cs.obs, 
+              aes(y=log(Fit), color = species), 
+              #width=0.005, 
+              alpha = 0.3, 
+              size = 2) +
+  stat_poly_line(method="lm", se = TRUE) + 
+  stat_poly_eq(use_label(c("eq", "R2")), hjust = -1.6)+
+  #geom_ribbon(aes(x=1/(temperature+273.15), 
+              #ymin= log(asymp.LCL), ymax= log(asymp.UCL)),
+              #alpha = 0.2, 
+              #color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("log(CS (U mg "^{-1} * "tissue))")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); cs.arrhenius.plot
+```
+ 
+# CS:LDH ratio 
+
+## Merge dataframes 
+
+To start we will merge the lactate dehydrogenase (LDH) and citrate synthase (CS) dataframes
+
+```{r merge-df}
+lc.data <- CS.data |> 
+  left_join(select(ldh.data, c("UNIQUE_SAMPLE_ID","LDH_ACTIVITY")), by = "UNIQUE_SAMPLE_ID") |> 
+  mutate(LDHCS = LDH_ACTIVITY/CS_ACTIVITY) |> 
+  drop_na(LDHCS)
+  
+```
+
+## Initial plot {.tabset}
+
+### LDH:CS v TEMPERATURE [SPECIES]
+
+```{r lcr-initial-plots, warning=FALSE, message=FALSE}
+ggplot(lc.data, aes(x =temperature, y= LDHCS, color = species)) + 
+  geom_point() + 
+  stat_smooth(method = "lm", se=FALSE) + 
+  theme_classic() 
+```
+
+### LDH:CS [distribution]
+```{r lcr-initial-plots-2, warning=FALSE, message=FALSE}
+ggplot(lc.data, aes(x = LDHCS, fill = temperature, color = temperature)) + 
+  geom_density(alpha =0.5, position = "identity") 
+
+ggplot(lc.data, aes(x=LDHCS)) + geom_histogram()
+```
+
+### LDH:CS v TEMPERATURE [LATITUDE]
+```{r lcr-initial-plots-3, warning=FALSE, message=FALSE}
+ggplot(lc.data, aes(x =temperature, y= LDHCS, colour = LATITUDE, fill=LATITUDE)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATIN_GENUS) + theme_classic()
+```
+
+### LDH:CS v TEMPERATURE [GENUS]
+```{r lcr-initial-plots-4, warning=FALSE, message=FALSE}
+ggplot(lc.data, aes(x =temperature, y= LDHCS, colour = LATIN_GENUS, fill=LATIN_GENUS)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + facet_grid(~LATITUDE) + theme_classic()
+```
+
+### LDH:CS v TEMPERATURE [SPECIES]
+```{r lcr-initial-plots-5, warning=FALSE, message=FALSE}
+ggplot(lc.data, aes(x =temperature, y= LDHCS, colour = species, fill= species)) +   geom_point(alpha=0.3) + stat_smooth(method = "lm", se=TRUE,  formula=y ~ poly(x, 2, raw=TRUE), alpha=0.3) + theme_classic()
+```
+
+### {-} 
+
+## Fit the model 
+
+The model was fit using the **glm** and later **glmmTMB** packages in R. A number of different models were tested to determine which hypothesis and associated variables best predicted enzyme activity when measured as a ratio between lactate dehygronease and citrate synthase. Model fit was examined using AICc, BIC, and r-squared values. Additional model were examined via the validation diagnostics provided by the **performance** and **dHARMA** packages in R.
+
+From our initial plots we can all see that the relationship between enzyme activity (LDH:CS) and temperature is not linear, but rather may represent either a quadratic or cubic relationship. Let's start out model selection process by comparing different polynomial models.  
+
+### polynomial models
+```{r lcr-model-fit-1, warning=FALSE}
+#--- model 1 ---# 
+lc.model.1 <- glm(LDHCS ~ temperature * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = lc.data) 
+
+lc.model.1.p2 <- glm(LDHCS ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = lc.data)  
+
+lc.model.1.p3 <- glm(LDHCS ~ poly(temperature, 3) * LATITUDE * LATIN_GENUS, 
+               family = gaussian(),
+               data = lc.data) 
+```
+
+#### model comparisons - polynomial models 
+```{r lcr-model-comparisons-1, warning=FALSE}
+aic.c=AICc(lc.model.1, lc.model.1.p2, lc.model.1.p3, k=3) 
+bic=BIC(lc.model.1, lc.model.1.p2, lc.model.1.p3)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredLR(lc.model.1)[1], r.squaredLR(lc.model.1.p2)[1], r.squaredLR(lc.model.1.p3)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(lc.model.1, lc.model.1.p2, lc.model.1.p3, test = "Chisq")
+```
+
+Looks like the model where temperature is treated as a second order polynomial (quadratic model) is better than the first and third order polynomial models. 
+
+**tissue.mass and mass** did not improve the model when looking at either lactate dehydrogenase or citrate synthase, therefore we will not be including it in the LDH:CS ratio analysis.
+
+Because tissue samples from the same fish were tested at multiple temperatures we need to include **fish_id** as a random factor. 
+
+### Generalised linear mixed model (GLMM)
+```{r lcr-glmm-1}
+lc.model.1.p2 <- glmmTMB(LDHCS ~ poly(temperature, 2) * LATITUDE * LATIN_GENUS + (1|fish_id), 
+               family = gaussian(),
+               REML = TRUE,
+               data = lc.data) 
+```
+
+Great! Now lets check our model validations to see how the model is performing. 
+
+## Model validation {.tabset}
+
+### lc.model.1 [performance]
+
+```{r lcr-model-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+lc.model.1.p2 %>% check_model(detrend = FALSE)
+```
+
+### lc.model.1 [DHARMa]
+
+```{r lcr-model-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown', comment=NA}
+lc.model.1.p2 %>% simulateResiduals(plot=TRUE)
+lc.model.1.p2 %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+
+Our initial model (gaussian distribution) does not seem to function well. The predictive model does not fit the observed data, and the qq-plot also does not do a good job, and the residuals appear to display heteroskedascity. Unexpectedly there are a number of issues also brought up with the DHARMa checks, KS-test is significant, and so is the deviation of the model quantiles from thier expectations.  
+
+Lets start by changing the link distribution used within the model to see if this helps the model out.
+
+### {-}
+
+## Re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r lcr-re-fit-model-1}
+lc.model.1.p2 <-  lc.model.1.p2 %>% update(REML = FALSE)
+lc.model.1.p2.log <- lc.model.1.p2 %>% update(family=gaussian(link="log"), 
+                                              REML=FALSE) 
+lc.model.1.p2.sqrt <- lc.model.1.p2 %>% update(family=gaussian(link="sqrt"), 
+                                               REML=FALSE) 
+```
+
+### re-fit model comparisons [link function]
+
+```{r lcr-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.sqrt,  k=3) 
+bic=BIC(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.sqrt)
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(lc.model.1.p2)[1], r.squaredGLMM(lc.model.1.p2.log)[1], r.squaredGLMM(lc.model.1.p2.sqrt)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.sqrt, test = "Chisq")
+```
+
+From our model outputs it looks like transforming the data via a log-link function seems to help. However, we will have to explore that data further as the r-squared value drops drastically
+
+## Model re-validation {.tabset}
+
+```{r lcr-re-fit-model}
+lc.model.1.p2.log <- lc.model.1.p2.log %>% update(REML=TRUE)
+```
+
+### lc.model.1.p2.log [performance]
+
+```{r lc-model-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+lc.model.1.p2.log %>% check_model(detrend=FALSE)
+```
+
+### lc.model.1.p2.log [DHARMa]
+
+```{r lc-model-re-validatiaon-2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+lc.model.1.p2.log %>% simulateResiduals(plot=TRUE)
+lc.model.1.p2.log %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+
+### {-}
+
+The log-link version of the model still has a number of issues, including a significant results for KS-test and quantile distributions, which shows that predicted data does not match the expected quantiles of a gaussian distribution and therefore violates assumptions within the gaussian distribution. 
+
+Because out data is continuous and all positive we can try to see if a Gamma distribution does a better job at modelling the data. We can also try fitting a Gamma distribution with a log-link function as well (the default for gamma is 'inverse').
+
+## Re-re-fitting model 
+
+Turn **REML** off when comparing models
+
+### re-fitting models [link functions]
+
+```{r lcr-re-re-fit-model-1, warning=FALSE}
+lc.model.1.p2 <-  lc.model.1.p2 %>% update(REML = FALSE)
+lc.model.1.p2.log <-  lc.model.1.p2.log %>% update(REML = FALSE)
+lc.model.1.p2.gamma <- lc.model.1.p2 %>% update(family=Gamma(), 
+                                              REML=FALSE) 
+lc.model.1.p2.gamma.log <- lc.model.1.p2 %>% update(family=Gamma(link="log"), 
+                                              REML=FALSE)
+``` 
+
+```{r lcr-re-re-fit-model-comparisons-1, warning=FALSE}
+aic.c=AICc(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log,   k=2) 
+bic=BIC(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log )
+
+model.fit.table <- as.data.frame(aic.c) %>% 
+  tibble::rownames_to_column("model") %>%
+  mutate(BIC = bic$BIC, 
+         r2 = c(r.squaredGLMM(lc.model.1.p2)[1], r.squaredGLMM(lc.model.1.p2.log)[1], r.squaredGLMM(lc.model.1.p2.gamma)[1], r.squaredGLMM(lc.model.1.p2.gamma.log)[1]))
+model.fit.table %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+
+anova(lc.model.1.p2, lc.model.1.p2.log, lc.model.1.p2.gamma, lc.model.1.p2.gamma.log,  test = "Chisq")
+```
+
+The gamma model seems to help when using a log. Lets look at the model validation to see if it is an appropriate model to use. 
+
+## Model re-re-validation {.tabset}
+
+Turn REML on 
+
+```{r lcr-re-re-fit-model-1.1, warning=FALSE}
+lc.model.1.p2.gamma.log <- lc.model.1.p2.gamma.log %>% update(REML=TRUE) 
+``` 
+
+### [performance] 
+
+#### lc.model.1.p2.gamma.log
+
+```{r lc-model-re-re-validatiaon-1, warning=FALSE, message=FALSE, fig.width=8, fig.height= 6}
+# lc.model.1.p2.gamma.log %>% check_model(detrend=FALSE)
+```
+
+
+### [DHARMa] 
+
+#### lc.model.1.p2.gamma.log
+```{r lc-model-re-32-validatiaon-1.2, fig.width=8, fig.height=8, message=FALSE, warning=FALSE, results='markdown'}
+lc.model.1.p2.gamma.log %>% simulateResiduals(plot=TRUE)
+lc.model.1.p2.gamma.log %>% DHARMa::testResiduals(plot=TRUE)
+```
+
+### {-} 
+
+This model does not violate any assumptions and therefore we can start to look at the results.  
+
+## Partial plots {.tabset} 
+
+### ggemmeans {.tabset} 
+
+#### TEMPERATURE V LATITUDE
+
+```{r lcr-partial-plots-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATITUDE) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS
+
+```{r lcr-partial-plots-1b, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+#### TEMPERATURE V GENUS V LATITUDE
+
+```{r lcr-partial-plots-1c, message=FALSE, echo=FALSE, fig.width=8, fig.height=6}
+lc.model.1.p2.gamma.log %>% ggemmeans(~temperature|LATITUDE|LATIN_GENUS) %>% plot(add.data=TRUE, jitter=c(0.05,0))
+```
+
+### plot_model 
+
+```{r lcr-partial-plots-1d, echo=FALSE, fig.width=8, fig.height=6}
+lc.model.1.p2.gamma.log %>% plot_model(vline.color = "grey12", show.values=TRUE, sort.est = TRUE, value.offset = 0.3) 
+```
+
+#### {-}
+
+### {-}
+
+## Model investigation {.tabset .tabset-pills}
+
+### summary 
+```{r lcr-model-inv-1, echo=FALSE}
+as.data.frame(summary(lc.model.1.p2.gamma.log)$coefficients[1]) %>% 
+  dplyr::rename( 
+    Estimate = cond.Estimate,
+    StdError = cond.Std..Error,
+    Zvalue = cond.z.value,
+    Pvalue = cond.Pr...z..
+    ) %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+### anova 
+```{r lcr-model-inv-2, echo=FALSE}
+lc.model.1.p2.gamma.log %>% Anova() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### confint 
+```{r lcr-model-inv-3, echo=FALSE}
+lc.model.1.p2.gamma.log %>% confint() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+``` 
+
+### r-squared
+```{r lcr-model-inv-4, echo=FALSE}
+lc.model.1.p2.gamma.log %>% performance::r2_nakagawa() %>% 
+  as.data.frame() %>%
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+## Pairwise comparisons {.tabset .tabset-faded} 
+
+### emtrends 
+
+```{r lcr-pairwise-1, eval = FALSE}
+lc.model.1.p2.gamma.log %>% emtrends(var = "temperature", type = "response") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+SCROLL TO THE RIGHT -->
+
+The numbers in the left most column in the table just mention that the slopes are assuming mean **MASS_CENTERED** and **RESTING_TIME_SEONDS** values when looking at differences between latitudinal slopes.
+
+### emmeans 
+```{r lcr-pairwise-2}
+lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid() %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=TRUE)
+```
+
+### emmeans [ratios]
+```{r lcr-pairwise-2.2}
+lc.model.1.p2.gamma.log %>% emmeans(pairwise ~ temperature*LATITUDE*LATIN_GENUS, type = "response") %>% regrid(transform="log") %>% pairs(by = "temperature") %>% summary(by = NULL, adjust = "sidak", infer=FALSE)
+```
+
+### temperature 
+```{r lcr-pairwise-3}
+lc.model.1.p2.gamma.log %>% emmeans(~ temperature*LATITUDE*LATIN_GENUS, type = "response")  %>% summary(infer=TRUE)
+```
+
+### temperture [combined]
+```{r lcr-pairwise-3.5}
+lc.means.temp <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature, type = "response")
+
+lc.means.temp.df <- lc.means.temp$emmeans %>% as.data.frame() %>% 
+  mutate("\u394 change"=response - lag(response, n=1, default = first(response)), 
+         "\u394 %change" = response/lag(response, n=1, default = first(response))*100) 
+lc.means.temp.df[1,8] = 0.0000 
+
+lc.means.temp.df  
+```
+
+### Genus [combined]
+```{r lcr-pairwise-genus}
+lc.means.genus <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ LATIN_GENUS, type = "response") %>% summary(infer=TRUE); lc.means.genus
+
+```
+
+### Means - f(temperature)
+```{r lcr-pairwise-4}
+lc.means <- lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") 
+
+lc.means.df <- lc.means$emmeans %>% as.data.frame() %>% 
+  mutate("change"=response - lag(response, n=1, default = first(response)), 
+         "%change" = response/lag(response, n=1, default = first(response))*100) %>% 
+  mutate("%change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `%change`), 
+         "change" = case_when(temperature == 10 ~ 0, 
+                                     TRUE ~ `change`)) %>% 
+  rename("\u394 %change" = "%change", 
+         "\u394 change" = "change")
+
+lc.means.df %>% knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE) 
+```
+
+### Abs. diff - f(temperature)
+```{r lcr-pairwise-5}
+lc.model.1.p2.gamma.log %>% update(LDHCS ~ factor(temperature) * LATITUDE * LATIN_GENUS + (1|fish_id)) %>% emmeans(pairwise ~ temperature*LATIN_GENUS*LATITUDE, type = "response") %>% regrid() %>% pairs(by =c("LATIN_GENUS","LATITUDE")) %>% summary(infer=TRUE, type = "response")
+```
+
+### effect size
+```{r lcr-effect-size}
+lc.emm <- lc.model.1.p2.gamma.log %>% emmeans(~temperature*LATITUDE*LATIN_GENUS)
+eff_size(lc.emm, sigma = sigma(lc.model.1.p2.gamma.log), edf=df.residual(lc.model.1.p2.gamma.log))
+```
+
+### {-}
+
+## Summary figure
+
+```{r lc-sum-fig, fig.width=8, fig.height=6, echo=TRUE, hide=TRUE}
+lc.emm <- emmeans(lc.model.1.p2.gamma.log, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+lc.emm.df <- lc.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+lc.obs <-  lc.data %>% 
+  mutate(Pred=exp(predict(lc.model.1.p2.gamma.log, re.form=NA)),
+         Resid = residuals(lc.model.1.p2.gamma.log, type="response"),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_jitter(data=lc.obs, 
+              aes(y=Fit, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= asymp.LCL, ymax= asymp.UCL),
+              alpha = 0.2, 
+              color=NA)+ 
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab("LDH:CS") + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Apogon doederlein","Apogon rubrimacula","Pomacentrus australis", "Pomacentrus moluccensis")) +  
+  theme(legend.position = "top", 
+        legend.text = element_text(size = 10), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); lc.plot
+```
+
+
+
+# Descriptive statistics 
+
+```{r descriptive statistics}
+lc.data2 <- CS.data |> 
+  full_join(select(ldh.data, c("UNIQUE_SAMPLE_ID","LDH_ACTIVITY")), by = "UNIQUE_SAMPLE_ID") |> 
+  mutate(LDHCS = LDH_ACTIVITY/CS_ACTIVITY) %>% 
+  separate(UNIQUE_SAMPLE_ID, into=c("LATIN_NAME_ABBREV","rep","temp"), sep="_", remove=FALSE) |>
+  mutate(LATIN_NAME= case_when(LATIN_NAME_ABBREV =="Adoed"~ "Apogon doederlein", 
+                               LATIN_NAME_ABBREV =="Arub"~ "Apogon rubrimacula",
+                               LATIN_NAME_ABBREV =="Pmol"~ "Pomacentrus moluccensis",
+                               LATIN_NAME_ABBREV =="Paus"~ "Pomacentrus australis",
+                               TRUE ~ LATIN_NAME
+                   )) %>% select(c("LATIN_NAME", "temp", "CS_ACTIVITY", "LDH_ACTIVITY", "LDHCS")) %>% 
+  pivot_longer(!c(LATIN_NAME,temp), names_to = "enzyme") %>% 
+  drop_na(value)
+  
+ 
+lc.data.table <- table(lc.data2$LATIN_NAME,lc.data2$temp, lc.data2$enzyme) %>% as.data.frame() 
+table(lc.data2$LATIN_NAME,lc.data2$temp, lc.data2$enzyme)%>% 
+  knitr::kable(format = "html")  %>%
+  kable_paper(full_width = TRUE)
+```
+
+# Figure {.tabset .tabset-faded}  
+
+## Figure 1
+```{r Figure-2, eval=FALSE, echo=TRUE, dpi=300}
+#--- library ---#
+library("magick") 
+library("grid")
+ruby <- image_read("./fish_figures/PNG/Ostorhinchus_rubrimacula.png")
+ruby.vector <- magick::image_ggplot(ruby, interpolate = TRUE)  
+ruby.image <- image_fill(ruby, 'none')
+ruby.raster <- as.raster(ruby.image) 
+
+doed <- image_read_svg("./fish_figures/SVG/Ostorhinchus_doederleini.svg")
+doed.vector <- magick::image_ggplot(doed, interpolate = TRUE)  
+doed.image <- image_fill(doed, 'none')
+doed.raster <- as.raster(doed.image) 
+
+australia <- image_read_svg("./fish_figures/SVG/paustralis2.svg")
+australia.vector <- magick::image_ggplot(australia, interpolate = TRUE)  
+australia.image <- image_fill(australia, 'none')
+australia.raster <- as.raster(australia.image) 
+
+molu <- image_read_svg("./fish_figures/SVG/lemon_damselfish.svg")
+molu.vector <- magick::image_ggplot(molu, interpolate = TRUE)  
+molu.image <- image_fill(molu, 'none')
+molu.raster <- as.raster(molu.image)
+#--- LDH plot ---# 
+ldh.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+ldh.emm.df <- ldh.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+ldh.obs <-  ldh.data %>% 
+  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA, type="response"),
+         Resid = residuals(ldh.sqrt.model.1.p2),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  geom_jitter(data=ldh.obs, 
+              aes(y=Fit^2, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  scale_x_continuous(limits = c(9, 56), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,350), breaks = seq(0, 350, by = 50)) +
+  theme_classic() + 
+  ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) + 
+  theme(legend.position = "none", 
+        legend.text = element_text(size = 12, face = "italic"), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =14), 
+        axis.text = element_text(size=12), 
+        axis.text.x = element_blank()) + 
+  annotation_raster(ruby.raster, 50, 56, 165, 215) + 
+  annotation_raster(doed.raster, 50, 56, 290, 340) + 
+  annotation_raster(australia.raster, 51, 56, 155, 205) + 
+  annotation_raster(molu.raster, 50, 56, 200, 250)
+
+#--- citrate synthase plot ---#
+cs.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+cs.emm.df <- cs.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+cs.obs <-  CS.data %>% 
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log,  type="response"),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  geom_jitter(data=cs.obs, 
+              aes(y=Fit, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  scale_x_continuous(limits = c(9, 56), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,16), breaks = seq(0, 16, by = 2)) +
+  theme_classic() + 
+  ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Ostorhinchus doederleini (sub-tropical)","Ostorhinchus rubrimacula (tropical)","Pomacentrus australis(sub-tropical)", "Pomacentrus moluccensis (tropical)"))+
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini (sub-tropical)","Ostorhinchus rubrimacula (tropical)","Pomacentrus australis(sub-tropical)", "Pomacentrus moluccensis (tropical)")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini (sub-tropical)","Ostorhinchus rubrimacula (tropical)","Pomacentrus australis(sub-tropical)", "Pomacentrus moluccensis (tropical)")) +  
+  theme(legend.position = c(0.3,0.8), 
+        legend.text = element_text(size = 12, face = "italic"), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =14), 
+        axis.text = element_text(size=12), 
+        axis.text.x = element_blank()) + 
+  annotation_raster(ruby.raster, 50, 56, 4.5, 7) + 
+  annotation_raster(doed.raster, 51, 57, 4.3, 6.8) + 
+  annotation_raster(australia.raster, 50.5, 55, 7.5, 10) + 
+  annotation_raster(molu.raster, 50, 56, 10, 12.5) 
+
+#--- LDH:CS plot ---# 
+lc.emm <- emmeans(lc.model.1.p2.gamma.log, ~temperature|LATITUDE|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+lc.emm.df <- lc.emm %>% as.data.frame() %>%
+  unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+lc.obs <-  lc.data %>% 
+  mutate(Pred=exp(predict(lc.model.1.p2.gamma.log, re.form=NA)),
+         Resid = residuals(lc.model.1.p2.gamma.log, type="response"),
+         Fit = Pred + Resid) %>%
+   unite("species", c("LATIN_GENUS","LATITUDE"), sep = "-", remove = FALSE) 
+
+
+lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, color = species, fill=species))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= asymp.LCL, ymax= asymp.UCL),
+              alpha = 0.2, 
+              color=NA)+ 
+  geom_jitter(data=lc.obs, 
+              aes(y=Fit, color = species), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  scale_x_continuous(limits = c(9, 56), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab("LDH:CS ratio") + 
+  xlab("Temperature (\u00B0C)")+
+  scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) +
+  scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) +
+  scale_fill_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
+                        labels = c("Ostorhinchus doederleini \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) +  
+  theme(legend.position = "none", 
+        legend.text = element_text(size = 12, face = "italic"), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =14), 
+        axis.text = element_text(size=12)) + 
+  guides(color = guide_legend(nrow=2)) + 
+  annotation_raster(ruby.raster, 50, 56, 30, 48) + 
+  annotation_raster(doed.raster, 50, 56, 65, 83) + 
+  annotation_raster(australia.raster, 50.5, 55, 18, 35) + 
+  annotation_raster(molu.raster, 51, 57, 16, 33)
+
+species.plot <- ggarrange(cs.plot, ldh.plot, lc.plot, 
+         nrow = 3, 
+         ncol= 1, 
+         align = "hv", 
+         labels = c("A","B","C"), 
+         common.legend = FALSE); species.plot
+
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot.png",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300) 
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.png", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot.pdf",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.pdf", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot.svg",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.svg", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+
+```
+
+## Supplemental Figure 1
+
+```{r SFigure-1, eval=FALSE, echo=TRUE}
+#--- LDH plot ---#
+ldh.temp.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") %>% as.data.frame()
+
+ldh.temp.obs <- ldh.data %>% 
+  mutate(Pred=predict(ldh.sqrt.model.1.p2, re.form=NA, type="response"),
+         Resid = residuals(ldh.sqrt.model.1.p2),
+         Fit = Pred + Resid)  
+
+
+ldh.temp.plot <- ggplot(ldh.temp.emm, aes(y=response, x=temperature))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.4, 
+              color=NA)+ 
+  geom_jitter(data=ldh.temp.obs , 
+              aes(y=Fit^2, fill = "black"), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2)+ 
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,350), breaks = seq(0, 350, by = 50)) +
+  theme_classic() + 
+  ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab("TEMPERATURE (°C)")+
+  theme(legend.position = "none",
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldh.temp.plot  
+
+#--- CS plot ---#
+cs.temp.emm <- emmeans(cs.model.1.p2.log, ~temperature, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") 
+
+cs.temp.df <- cs.temp.emm %>% as.data.frame() 
+
+cs.temp.obs <-  CS.data %>% 
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log,  type="response"),
+         Fit = Pred + Resid) 
+
+
+cs.temp.plot <- ggplot(cs.temp.df, aes(y=response, x=temperature))+
+  geom_jitter(data=cs.temp.obs, 
+              aes(y=Fit, fill="black"), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.2, 
+              color=NA)+ 
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,12), breaks = seq(0, 12, by = 2)) +
+  theme_classic() + 
+  ylab(expression("CS ACTIVITY (U mg "^{-1} * "tissue)")) + 
+  xlab(" ")+
+  theme(legend.position = "none", 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); cs.temp.plot
+
+temp.plot <- ggarrange(cs.temp.plot, ldh.temp.plot,
+         nrow = 2, 
+         ncol= 1, 
+          align = "hv", 
+         labels = c("A","B"), 
+         common.legend = FALSE); temp.plot 
+
+
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.svg",  plot=temp.plot, width=15.5, height=8.5, units = "in", dpi=300) 
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.svg", plot=temp.plot, width=12, height=7, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.svg", plot=temp.plot, width=8, height=5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.pdf",  plot=temp.plot, width=15.5, height=8.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.pdf", plot=temp.plot, width=12, height=7, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+``` 
+
+## Supplemental Figure 2
+
+```{r Figure-1, eval=FALSE, echo=TRUE}
+cs.genus.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") %>% as.data.frame()
+
+cs.genus.obs <-  CS.data %>% 
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log, type="response"),
+         Fit = Pred + Resid)  
+
+
+cs.genus.plot <- ggplot(cs.genus.emm, aes(y=response, x=temperature, linetype=LATIN_GENUS, color = LATIN_GENUS, fill=LATIN_GENUS))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.4, 
+              color=NA)+ 
+  geom_jitter(data=cs.genus.obs , 
+              aes(y=Fit, color = LATIN_GENUS), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("CS ACTIVITY (U mg "^{-1} * " tissue)")) + 
+  xlab("Temperature (°C)") + 
+  scale_linetype_manual(values = c("solid", "dashed"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) +
+  scale_color_manual(values=c("black","gray60"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) +
+  scale_fill_manual(values=c("black","gray60"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) + 
+   theme(legend.position = c(0.2,0.85), 
+        legend.text = element_text(size = 14, face = "italic"), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =16), 
+        axis.text = element_text(size=14))
+
+
+
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot.svg",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300) 
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot2.svg", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot3.svg", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot.pdf",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot2.pdf", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/SFigure2_cs_genus_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+```
+
+## Supplemental Figure x
+
+```{r SFigure-2, eval=FALSE, echo=TRUE}
+ldh.dperc.plot <- ggplot(ldh.means.temp.df, aes(x=temperature, y=`Δ %change`)) + 
+  geom_line(size=2) + 
+  geom_point(shape = 15, color="red", size = 3) +
+  xlab("") + ylab(expression("\u394 % CHANGE IN LDH ACTIVITY (U mg "^{-1} * "tissue)"))+
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,400), breaks = seq(0, 400, by = 50)) +
+  theme_classic() + 
+  theme(axis.title = element_text(size =13), 
+        axis.text = element_text(size=12))
+
+cs.dperc.plot <- ggplot(cs.means.temp.df, aes(x=temperature, y=`Δ %change`)) + 
+  geom_line(size=2) + 
+  geom_point(shape = 15, color="red", size = 3) +
+  xlab("") + ylab(expression("\u394 % CHANGE IN CS ACTIVITY (U mg "^{-1} * "tissue)"))+
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,250), breaks = seq(0, 250, by = 50)) +
+  theme_classic()  + 
+  theme(axis.title = element_text(size =13), 
+        axis.text = element_text(size=12))  
+
+lc.dperc.plot <- ggplot(lc.means.temp.df, aes(x=temperature, y=`Δ %change`)) + 
+  geom_line(size=2) + 
+  geom_point(shape = 15, color="red", size = 3) +
+  xlab("TEMPERATURE") + ylab(expression("\u394 % CHANGE IN LDH:CS RATIO"))+
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,250), breaks = seq(0, 250, by = 50)) +
+  theme_classic()  + 
+  theme(axis.title = element_text(size =13), 
+        axis.text = element_text(size=12))
+
+dchange.plot <- ggarrange(cs.dperc.plot, ldh.dperc.plot, lc.dperc.plot,
+         nrow = 3, 
+         ncol= 1, 
+          align = "hv", 
+         labels = c("A","B","C"), 
+         common.legend = FALSE); dchange.plot 
+
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot.svg",  plot=dchange.plot, width=8.5, height=15.5, units = "in", dpi=300) 
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot2.svg", plot=dchange.plot, width=7, height=12, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot3.svg", plot=dchange.plot, width=5, height=8, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot.pdf",  plot=dchange.plot, width=8.5, height=15.5, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot2.pdf", plot=dchange.plot, width=7, height=12, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/SFigure2_dchange_plot3.pdf", plot=dchange.plot, width=5, height=8, units = "in", dpi=300)
+```
+## {-}
