@@ -2241,7 +2241,7 @@ table(lc.data2$LATIN_NAME,lc.data2$temp, lc.data2$enzyme)%>%
 # Figure {.tabset .tabset-faded}  
 
 ## Figure 1
-```{r Figure-1, eval=FALSE, echo=TRUE}
+```{r Figure-1, eval=TRUE, echo=TRUE, fig.width=8, fig.height=10}
 #--- LDH plot ---# 
 ldh.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature|LATITUDE|LATIN_GENUS, 
                    at = list(temperature = seq(from =10, to =50, by =.1)), 
@@ -2387,17 +2387,17 @@ species.plot <- ggarrange(cs.plot, ldh.plot, lc.plot,
          labels = c("A","B","C"), 
          common.legend = FALSE); species.plot
 
-ggsave(file="./02.Figures/Figure1/Figure1_species_plot.svg",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300) 
-ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.svg", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+#ggsave(file="./02.Figures/Figure1/Figure1_species_plot.svg",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300) 
+#ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.svg", plot=species.plot, width=7, height=12, units = "in", dpi=300)
 #ggsave(file="./02.Figures/Figure2/Figure2_species_plot3.svg", plot=species.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_species_plot.pdf",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.pdf", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+#ggsave(file="./02.Figures/Figure1/Figure1_species_plot.pdf",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
+#ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.pdf", plot=species.plot, width=7, height=12, units = "in", dpi=300)
 #ggsave(file="./02.Figures/Figure2/Figure2_species_plot3.pdf", plot=species.plot, width=5, height=8, units = "in", dpi=300)
 ```
 
 ## Supplemental Figure 1
 
-```{r SFigure-1, eval=FALSE, echo=TRUE}
+```{r SFigure-1, eval=TRUE, echo=TRUE, fig.width=8, fig.height=10}
 #--- LDH plot ---#
 ldh.temp.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature, 
                    at = list(temperature = seq(from =10, to =50, by =.1)), 
@@ -2505,17 +2505,17 @@ temp.plot <- ggarrange(cs.temp.plot, ldh.temp.plot, ldhcs.temp.plot,
          common.legend = FALSE); temp.plot 
 
 
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.svg",  plot=temp.plot, width=12, height=10, units = "in", dpi=300) 
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.svg", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
+#(file="./02.Figures/SFigure1/SFigure1_temp_plot.svg",  plot=temp.plot, width=12, height=10, units = "in", dpi=300) 
+#ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.svg", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
 #ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.svg", plot=temp.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.pdf",  plot=temp.plot, width=12, height=10, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.pdf", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.pdf",  plot=temp.plot, width=12, height=10, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.pdf", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
 #ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
 ``` 
 
 ## Supplemental figure 2
 
-```{r SFigure-2, eval=FALSE, echo=TRUE}
+```{r SFigure-2, eval=TRUE, echo=TRUE, fig.width=8, fig.height=10}
 cs.genus.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATIN_GENUS, 
                    at = list(temperature = seq(from =10, to =50, by =.1)), 
                    type = "response") %>% as.data.frame()
@@ -2553,16 +2553,16 @@ cs.genus.plot <- ggplot(cs.genus.emm, aes(y=response, x=temperature, linetype=LA
         legend.text = element_text(size = 14, face = "italic"), 
         legend.title = element_blank(), 
         axis.title = element_text(size =16), 
-        axis.text = element_text(size=14))
+        axis.text = element_text(size=14)); cs.genus.plot
 
 
 
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.svg",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300) 
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.svg", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.svg", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.pdf",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.pdf", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.svg",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300) 
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.svg", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.svg", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.pdf",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.pdf", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+#ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
 ```
 
 
@@ -2570,7 +2570,7 @@ ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.pdf", plot=cs.genus.pl
 
 ## Supplemental Figure 2 (old)
 
-```{r SFigure-2, eval=FALSE, echo=TRUE}
+```{r SFigure-NA, eval=FALSE, echo=FALSE}
 ldh.dperc.plot <- ggplot(ldh.means.temp.df, aes(x=temperature, y=`Δ %change`)) + 
   geom_line(size=2) + 
   geom_point(shape = 15, color="red", size = 3) +
