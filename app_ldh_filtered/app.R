@@ -92,7 +92,8 @@ ui <- fluidPage(
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            div(style="display:inline-block;",radioButtons(
+            div(style="display:inline-block;",
+                radioButtons(
                 "TEMPERATURE",
                         "Temperature C",
                         c("10" = "10", 

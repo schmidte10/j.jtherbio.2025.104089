@@ -2241,58 +2241,7 @@ table(lc.data2$LATIN_NAME,lc.data2$temp, lc.data2$enzyme)%>%
 # Figure {.tabset .tabset-faded}  
 
 ## Figure 1
-
 ```{r Figure-1, eval=FALSE, echo=TRUE}
-cs.genus.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATIN_GENUS, 
-                   at = list(temperature = seq(from =10, to =50, by =.1)), 
-                   type = "response") %>% as.data.frame()
-
-cs.genus.obs <-  CS.data %>% 
-  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
-         Resid = residuals(cs.model.1.p2.log, type="response"),
-         Fit = Pred + Resid)  
-
-
-cs.genus.plot <- ggplot(cs.genus.emm, aes(y=response, x=temperature, linetype=LATIN_GENUS, color = LATIN_GENUS, fill=LATIN_GENUS))+
-  geom_line(linewidth =1) + 
-  geom_ribbon(aes(x=temperature, 
-              ymin= lower.CL, ymax= upper.CL),
-              alpha = 0.4, 
-              color=NA)+ 
-  geom_jitter(data=cs.genus.obs , 
-              aes(y=Fit, color = LATIN_GENUS), 
-              width=0.05, 
-              alpha = 0.3, 
-              size = 2) +
-  #scale_x_continuous(limits = c(9, 52), 
-                     #breaks = seq(10, 52, by = 10))+ 
-  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
-  theme_classic() + 
-  ylab(expression("CS ACTIVITY (U mg "^{-1} * " tissue)")) + 
-  xlab("Temperature (°C)") + 
-  scale_linetype_manual(values = c("solid", "dashed"), 
-                        labels = c("Ostorhinchus","Pomacentrus")) +
-  scale_color_manual(values=c("black","gray60"), 
-                        labels = c("Ostorhinchus","Pomacentrus")) +
-  scale_fill_manual(values=c("black","gray60"), 
-                        labels = c("Ostorhinchus","Pomacentrus")) + 
-   theme(legend.position = c(0.2,0.85), 
-        legend.text = element_text(size = 14, face = "italic"), 
-        legend.title = element_blank(), 
-        axis.title = element_text(size =16), 
-        axis.text = element_text(size=14))
-
-
-
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot.svg",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300) 
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot2.svg", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot3.svg", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot.pdf",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot2.pdf", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure1/Figure1_cs_genus_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
-```
-## Figure 2
-```{r Figure-2, eval=FALSE, echo=TRUE}
 #--- LDH plot ---# 
 ldh.emm <- emmeans(ldh.sqrt.model.1.p2, ~temperature|LATITUDE|LATIN_GENUS, 
                    at = list(temperature = seq(from =10, to =50, by =.1)), 
@@ -2336,7 +2285,8 @@ ldh.plot <- ggplot(ldh.emm.df, aes(y=response, x=temperature, linetype=species, 
         legend.title = element_blank(), 
         axis.title = element_text(size =14), 
         axis.text = element_text(size=12), 
-        axis.text.x = element_blank())
+        axis.text.x = element_blank(), 
+        plot.margin=margin(.5,3,.5,.5, unit="cm"))
 
 #--- citrate synthase plot ---#
 cs.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATITUDE|LATIN_GENUS, 
@@ -2381,7 +2331,8 @@ cs.plot <- ggplot(cs.emm.df, aes(y=response, x=temperature, linetype=species, co
         legend.title = element_blank(), 
         axis.title = element_text(size =14), 
         axis.text = element_text(size=12), 
-        axis.text.x = element_blank()) 
+        axis.text.x = element_blank(), 
+        plot.margin=margin(.5,3,.5,.5, unit="cm")) 
 
 #--- LDH:CS plot ---# 
 lc.emm <- emmeans(lc.model.1.p2.gamma.log, ~temperature|LATITUDE|LATIN_GENUS, 
@@ -2414,7 +2365,7 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
   scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
   theme_classic() + 
   ylab("LDH:CS ratio") + 
-  xlab("Temperature (°C)")+
+  xlab("Temperature (\u00B0C)")+
   scale_linetype_manual(values = c("solid", "dashed","solid", "dashed"), 
                         labels = c("Ostorhinchus doederlein \n (sub-tropical)","Ostorhinchus rubrimacula \n (tropical)","Pomacentrus australis \n (sub-tropical)", "Pomacentrus moluccensis \n (tropical)")) +
   scale_color_manual(values=c("#3F3525","#C65C1B",  "#07AFF2", "#EAAE00"), 
@@ -2426,7 +2377,8 @@ lc.plot <- ggplot(lc.emm.df, aes(y=response, x=temperature, linetype=species, co
         legend.title = element_blank(), 
         axis.title = element_text(size =14), 
         axis.text = element_text(size=12)) + 
-  guides(color = guide_legend(nrow=2))
+  guides(color = guide_legend(nrow=2), 
+        plot.margin=margin(.5,3,.5,.5, unit="cm"))
 
 species.plot <- ggarrange(cs.plot, ldh.plot, lc.plot, 
          nrow = 3, 
@@ -2435,11 +2387,11 @@ species.plot <- ggarrange(cs.plot, ldh.plot, lc.plot,
          labels = c("A","B","C"), 
          common.legend = FALSE); species.plot
 
-ggsave(file="./02.Figures/Figure2/Figure2_species_plot.svg",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300) 
-ggsave(file="./02.Figures/Figure2/Figure2_species_plot2.svg", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot.svg",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300) 
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.svg", plot=species.plot, width=7, height=12, units = "in", dpi=300)
 #ggsave(file="./02.Figures/Figure2/Figure2_species_plot3.svg", plot=species.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure2/Figure2_species_plot.pdf",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
-ggsave(file="./02.Figures/Figure2/Figure2_species_plot2.pdf", plot=species.plot, width=7, height=12, units = "in", dpi=300)
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot.pdf",  plot=species.plot, width=8.5, height=15.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/Figure1/Figure1_species_plot2.pdf", plot=species.plot, width=7, height=12, units = "in", dpi=300)
 #ggsave(file="./02.Figures/Figure2/Figure2_species_plot3.pdf", plot=species.plot, width=5, height=8, units = "in", dpi=300)
 ```
 
@@ -2473,7 +2425,7 @@ ldh.temp.plot <- ggplot(ldh.temp.emm, aes(y=response, x=temperature))+
   scale_y_continuous(limits = c(0,350), breaks = seq(0, 350, by = 50)) +
   theme_classic() + 
   ylab(expression("LDH ACTIVITY (U mg "^{-1} * "tissue)")) + 
-  xlab("TEMPERATURE (°C)")+
+  xlab("")+
   theme(legend.position = "none",
         axis.title = element_text(size =12), 
         axis.text = element_text(size=10)); ldh.temp.plot  
@@ -2512,23 +2464,111 @@ cs.temp.plot <- ggplot(cs.temp.df, aes(y=response, x=temperature))+
         axis.title = element_text(size =12), 
         axis.text = element_text(size=10)); cs.temp.plot
 
-temp.plot <- ggarrange(cs.temp.plot, ldh.temp.plot,
-         nrow = 2, 
+#--- LDH:CS ---# 
+ldhcs.temp.emm <- emmeans(lc.model.1.p2.gamma.log, ~temperature, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") %>% as.data.frame()
+
+ldhcs.temp.df <- ldhcs.temp.emm %>% as.data.frame()
+
+ldhcs.temp.obs <- lc.data %>% 
+  mutate(Pred=predict(lc.model.1.p2.gamma.log, re.form=NA, type="response"),
+         Resid = residuals(lc.model.1.p2.gamma.log),
+         Fit = Pred + Resid)
+
+ldhcs.temp.plot <- ggplot(ldhcs.temp.df, aes(y=response, x=temperature))+
+  geom_jitter(data=ldhcs.temp.obs, 
+              aes(y=Fit, fill="black"), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= asymp.LCL, ymax= asymp.UCL),
+              alpha = 0.2, 
+              color=NA)+ 
+  scale_x_continuous(limits = c(9, 52), 
+                     breaks = seq(10, 52, by = 10))+ 
+  scale_y_continuous(limits = c(0,100), breaks = seq(0, 100, by = 20)) +
+  theme_classic() + 
+  ylab(expression("LDH:CS ratio")) + 
+  xlab("TEMPERATURE (\u00B0C)")+
+  theme(legend.position = "none", 
+        axis.title = element_text(size =12), 
+        axis.text = element_text(size=10)); ldhcs.temp.plot
+
+temp.plot <- ggarrange(cs.temp.plot, ldh.temp.plot, ldhcs.temp.plot,
+         nrow = 3, 
          ncol= 1, 
           align = "hv", 
-         labels = c("A","B"), 
+         labels = c("A","B","C"), 
          common.legend = FALSE); temp.plot 
 
 
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.svg",  plot=temp.plot, width=15.5, height=8.5, units = "in", dpi=300) 
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.svg", plot=temp.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.svg",  plot=temp.plot, width=12, height=10, units = "in", dpi=300) 
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.svg", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
 #ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.svg", plot=temp.plot, width=8, height=5, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.pdf",  plot=temp.plot, width=15.5, height=8.5, units = "in", dpi=300)
-ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.pdf", plot=temp.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot.pdf",  plot=temp.plot, width=12, height=10, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot2.pdf", plot=temp.plot, width=10, height=8, units = "in", dpi=300)
 #ggsave(file="./02.Figures/SFigure1/SFigure1_temp_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
 ``` 
 
-## Supplemental Figure 2
+## Supplemental figure 2
+
+```{r SFigure-2, eval=FALSE, echo=TRUE}
+cs.genus.emm <- emmeans(cs.model.1.p2.log, ~temperature|LATIN_GENUS, 
+                   at = list(temperature = seq(from =10, to =50, by =.1)), 
+                   type = "response") %>% as.data.frame()
+
+cs.genus.obs <-  CS.data %>% 
+  mutate(Pred=exp(predict(cs.model.1.p2.log, re.form=NA)),
+         Resid = residuals(cs.model.1.p2.log, type="response"),
+         Fit = Pred + Resid)  
+
+
+cs.genus.plot <- ggplot(cs.genus.emm, aes(y=response, x=temperature, linetype=LATIN_GENUS, color = LATIN_GENUS, fill=LATIN_GENUS))+
+  geom_line(linewidth =1) + 
+  geom_ribbon(aes(x=temperature, 
+              ymin= lower.CL, ymax= upper.CL),
+              alpha = 0.4, 
+              color=NA)+ 
+  geom_jitter(data=cs.genus.obs , 
+              aes(y=Fit, color = LATIN_GENUS), 
+              width=0.05, 
+              alpha = 0.3, 
+              size = 2) +
+  #scale_x_continuous(limits = c(9, 52), 
+                     #breaks = seq(10, 52, by = 10))+ 
+  #scale_y_continuous(limits = c(0,120), breaks = seq(0, 120, by = 20)) +
+  theme_classic() + 
+  ylab(expression("CS ACTIVITY (U mg "^{-1} * " tissue)")) + 
+  xlab("Temperature (°C)") + 
+  scale_linetype_manual(values = c("solid", "dashed"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) +
+  scale_color_manual(values=c("black","gray60"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) +
+  scale_fill_manual(values=c("black","gray60"), 
+                        labels = c("Ostorhinchus","Pomacentrus")) + 
+   theme(legend.position = c(0.2,0.85), 
+        legend.text = element_text(size = 14, face = "italic"), 
+        legend.title = element_blank(), 
+        axis.title = element_text(size =16), 
+        axis.text = element_text(size=14))
+
+
+
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.svg",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300) 
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.svg", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.svg", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot.pdf",  plot=cs.genus.plot, width=15.5, height=8.5, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot2.pdf", plot=cs.genus.plot, width=12, height=7, units = "in", dpi=300)
+ggsave(file="./02.Figures/SFigure2/Figure2_cs_genus_plot3.pdf", plot=cs.genus.plot, width=8, height=5, units = "in", dpi=300)
+```
+
+
+
+
+## Supplemental Figure 2 (old)
 
 ```{r SFigure-2, eval=FALSE, echo=TRUE}
 ldh.dperc.plot <- ggplot(ldh.means.temp.df, aes(x=temperature, y=`Δ %change`)) + 
